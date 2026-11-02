@@ -1,0 +1,64 @@
+name: NoMaD-GL-Official
+goal_type: goal_less
+image_resolution: [96, 96]
+context_size: 4
+obs_normalize: true
+diffusion_steps: 10
+diffusion_scheduler: DDPMScheduler
+diffusion_config:
+  beta_schedule: squaredcos_cap_v2
+  clip_sample: true
+  prediction_type: epsilon
+inputs:
+  obs_img: {shape: [batch, 12, 96, 96], dtype: float32, description: "4 RGB frames x 3 channels, ImageNet normalized"}
+  goal_img: {shape: [batch, 3, 96, 96], dtype: float32, description: "Goal image (random noise for goal-free)"}
+  goal_mask: {shape: [batch], dtype: int64, description: "1=goal-free, 0=goal-conditioned"}
+outputs:
+  trajectories: {shape: [num_samples, 8, 2], description: "8 normalized delta-actions in [-1,1]; decode via unnorm→cumsum→scale"}
+  distances: {shape: [batch, 1], description: "Predicted distance to goal"}
+num_waypoints: 8
+num_samples: 8
+waypoint_index: 2
+
+# NoMaD action decoder (NavDP convention)
+#   1. unnormalize:  d = (norm + 1) / 2 * (max - min) + min
+#   2. cumsum over time → cumulative positions in dataset units
+#   3. multiply by metric_waypoint_spacing → meters in robot frame (x=fwd, y=left)
+normalize: true
+action_stats:
+  min: [0.0, -4.0]   # [min_dx, min_dy] in dataset waypoint-spacing units
+  max: [5.0, 4.0]     # [max_dx, max_dy]
+# Per-step metric spacing (meters): model_max_v / model_rate = 0.8 / 3.0
+model_max_v: 0.8
+model_rate: 3.0
+metric_waypoint_spacing: 0.26667
+
+# Inference frame rate (Hz). NoMaD was trained at 4 Hz observation rate; the
+# 4-frame context spans ~0.75 s and each predicted waypoint is 1/model_fps s
+# into the future. Upstream callers should downsample their input video to
+# match this — see test_inference_forward.py.
+model_fps: 4.0
+
+checkpoint_repository: UCLA-VAIL/Navigation-Model-Zoo-Public
+checkpoint_revision: 297b6596125bd870fc4e761f2bda5e243a5a4d29
+checkpoint_files:
+  nomad_dist_pred.onnx:
+    public_path: NoMaD_GL_Official/nomad_dist_pred.onnx
+    sha256: adab58bef61d7b8d0f2bf04636853f0056229e06634e2536a5e7821d6b9def4f
+    size: 71682
+  nomad_dist_pred.onnx.data:
+    public_path: NoMaD_GL_Official/nomad_dist_pred.onnx.data
+    sha256: f5c54bf7d70159a741188ad5d84348e11a673e424064f6493ffbed1a0ba4b76b
+    size: 69632
+  nomad_noise_pred.onnx:
+    public_path: NoMaD_GL_Official/nomad_noise_pred.onnx
+    sha256: f3588e1ff53ba748240f160d3cd3fec0c9c987f05e59ec64a631c3536e036e34
+    size: 15554469
+  nomad_vision_encoder.onnx:
+    public_path: NoMaD_GL_Official/nomad_vision_encoder.onnx
+    sha256: a3477772d7ff671dbba9711c58b2df89deb9b1b6a93cae07c530524ab6d47377
+    size: 47986697
+  nomad_vision_encoder.onnx.data:
+    public_path: NoMaD_GL_Official/nomad_vision_encoder.onnx.data
+    sha256: 57ceee7e8f0777b6e5cb444cddb1e17549e8188c78ba414463696b130031b320
+    size: 47448064

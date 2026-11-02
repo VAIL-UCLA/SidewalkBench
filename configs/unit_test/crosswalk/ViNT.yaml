@@ -1,0 +1,5 @@
+model_type: ViNT
+terrain_type: intersection
+terrain_segment: crosswalk
+num_peds_per_terrain: 0
+scenario_type: empty

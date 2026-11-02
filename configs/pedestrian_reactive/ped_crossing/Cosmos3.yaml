@@ -1,0 +1,5 @@
+model_type: Cosmos3
+terrain_type: intersection
+terrain_segment: crosswalk
+num_peds_per_terrain: 1
+scenario_type: ped_crossing

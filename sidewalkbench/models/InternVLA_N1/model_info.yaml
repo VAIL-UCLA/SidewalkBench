@@ -1,0 +1,137 @@
+name: InternVLA-N1-DualVLN
+goal_type: language
+architecture: dual_system
+image_resolution:
+- 384
+- 384
+obs_normalize: false
+context_size: 8
+sub_systems:
+  S2:
+    role: high-level VLM (action / pixel-goal)
+    base: Qwen2.5-VL
+    output_kinds:
+    - discrete_action
+    - pixel_goal
+  S1:
+    role: low-level diffusion policy (continuous trajectory)
+    triggered_by: Full S2 output latent, on every control step
+    output_kinds:
+    - trajectory
+inputs:
+  rgb:
+    accepted_shapes:
+    - (H, W, 3) uint8
+    - (3, H, W) float [0,1] or uint8
+    - (B=1, 3, H, W)
+    - (T, 3, H, W)
+    - (B=1, T, 3, H, W)
+    description: Current RGB frame; any supplied history is reduced to its last frame
+  instruction:
+    dtype: str
+    description: Natural-language goal; set once per episode via set_instruction()
+outputs:
+  trajectory:
+    shape: (N, 2)
+    dtype: float32
+    frame: x=forward (+), y=left (+)
+    unit: meters
+    description: Origin plus continuous S1 waypoints, produced for every S2 output
+  pixel_goal:
+    shape: (2,)
+    dtype: int
+    description: '[row, col] in the 384x384 image'
+  action:
+    shape: (K,)
+    dtype: int
+    description: Discrete action sequence (see action_vocab)
+action_vocab:
+  0: STOP
+  1: FORWARD
+  2: TURN_LEFT
+  3: TURN_RIGHT
+  5: LOOK_DOWN
+normalize: false
+camera_intrinsic:
+  fx: 386.5
+  fy: 386.5
+  cx: 328.9
+  cy: 244.0
+uses_depth: false
+uses_pose: false
+model_fps: null
+checkpoint:
+  vlm: ckpts/InternVLA-N1-DualVLN/
+  depth_backbone: ckpts/depth_anything_v2_metric_hypersim_vits.pth
+inference_pipeline: always_s1
+num_waypoints: 33
+prediction_horizon_s: 2.0
+trajectory_includes_origin: true
+prediction_timing_note: Benchmark convention for untimed S1 spatial paths; preserves
+  the historical PD divisor of 1 s.
+
+checkpoint_repository: InternRobotics/InternVLA-N1-DualVLN
+checkpoint_revision: a698a9e898b4001621a319e1bc89f02ec715cc86
+checkpoint_files:
+  ckpts/InternVLA-N1-DualVLN/added_tokens.json:
+    public_path: added_tokens.json
+    sha256: 58b54bbe36fc752f79a24a271ef66a0a0830054b4dfad94bde757d851968060b
+    size: 605
+  ckpts/InternVLA-N1-DualVLN/chat_template.json:
+    public_path: chat_template.json
+    sha256: ad60d90252ed0b0705ba14e2d0ad0fec0beac1ea955642b54059b36052d8bc96
+    size: 1050
+  ckpts/InternVLA-N1-DualVLN/config.json:
+    public_path: config.json
+    sha256: 1fb077026fda624941d0bd7f426a567c7fc8e8ef187face2293da5e68910aa0a
+    size: 1548
+  ckpts/InternVLA-N1-DualVLN/generation_config.json:
+    public_path: generation_config.json
+    sha256: 38594b29b91105e5e6d29d5218ffec1542aa1929b533332fb040e7e5a7d0520c
+    size: 290
+  ckpts/InternVLA-N1-DualVLN/merges.txt:
+    public_path: merges.txt
+    sha256: 8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5
+    size: 1671853
+  ckpts/InternVLA-N1-DualVLN/model-00001-of-00004.safetensors:
+    public_path: model-00001-of-00004.safetensors
+    sha256: 20568d171de945f90a639660269e95b683fa7d3bfbe0d289061def253bbf25fa
+    size: 4968272072
+  ckpts/InternVLA-N1-DualVLN/model-00002-of-00004.safetensors:
+    public_path: model-00002-of-00004.safetensors
+    sha256: 5f428e520713b4e69127fd7bda6b1b2e102a49b3413c5b66a86cf7dd7ec33353
+    size: 4991495816
+  ckpts/InternVLA-N1-DualVLN/model-00003-of-00004.safetensors:
+    public_path: model-00003-of-00004.safetensors
+    sha256: 065ccb104faf4dd6b5c408fd56d2a36e7ba91aa2d0165897cf2c9143b10144be
+    size: 4932751040
+  ckpts/InternVLA-N1-DualVLN/model-00004-of-00004.safetensors:
+    public_path: model-00004-of-00004.safetensors
+    sha256: 0a841defcc20609d0bb12e8c5666edd016e7d4f180b55ed64eb71b27e9c850c0
+    size: 1874713510
+  ckpts/InternVLA-N1-DualVLN/model.safetensors.index.json:
+    public_path: model.safetensors.index.json
+    sha256: da61b859ff81b93a63960d63acf17ec7396f38e8e334ef834e768e80c10119e4
+    size: 112331
+  ckpts/InternVLA-N1-DualVLN/preprocessor_config.json:
+    public_path: preprocessor_config.json
+    sha256: 549c158011407dfb750d9ec578047cf76f5bfe365cd0aa069a50137d3f98d9dd
+    size: 575
+  ckpts/InternVLA-N1-DualVLN/special_tokens_map.json:
+    public_path: special_tokens_map.json
+    sha256: 76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd
+    size: 613
+  ckpts/InternVLA-N1-DualVLN/tokenizer_config.json:
+    public_path: tokenizer_config.json
+    sha256: f939294a8457b05bde6764ab3d5368140df309d4b69534943a9372c8aa901b32
+    size: 7281
+  ckpts/InternVLA-N1-DualVLN/vocab.json:
+    public_path: vocab.json
+    sha256: 87a257b04b17642a0688c98cd1df89c398bda4fee532d6f88b38a659ecb4ac8d
+    size: 3383407
+  ckpts/depth_anything_v2_metric_hypersim_vits.pth:
+    public_path: depth_anything_v2_metric_hypersim_vits.pth
+    repository: depth-anything/Depth-Anything-V2-Metric-Hypersim-Small
+    revision: 3bc65d4e14a6786a61acec16453c50e12bf5f338
+    sha256: b782898d8a3e8be1f639de33837ed85e9b4b73e40f8f5e5cd99067588d722545
+    size: 99222290

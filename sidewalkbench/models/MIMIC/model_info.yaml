@@ -1,0 +1,21 @@
+name: MIMIC
+goal_type: goal_free
+image_resolution: [288, 512]
+context_size: 16
+input_fps: 5.0
+obs_normalize: false
+inputs:
+  input: {shape: [1, 16, 3, 288, 512], dtype: float32, description: "16 RGB frames [t-15, ..., t] in [0,1]"}
+outputs:
+  output: {shape: [1, 15, 3], description: "15 waypoints x 3 (x, y, yaw) at non-uniform timestamps [1,2,4,6,7,8,10,12,14,15,17,19,21,23,25] @ 5Hz (0.2s-5.0s)"}
+num_waypoints: 15
+output_timestamps_5hz: [1, 2, 4, 6, 7, 8, 10, 12, 14, 15, 17, 19, 21, 23, 25]
+output_fps: 5.0
+
+checkpoint_repository: UCLA-VAIL/Navigation-Model-Zoo-Public
+checkpoint_revision: 297b6596125bd870fc4e761f2bda5e243a5a4d29
+checkpoint_files:
+  mimic.onnx:
+    public_path: MIMIC/mimic.onnx
+    sha256: 7557512c791b824a1d693368d590ee6741af8a9aeef7974b763eb912df69d765
+    size: 318192969

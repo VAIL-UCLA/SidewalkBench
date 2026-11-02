@@ -1,0 +1,103 @@
+# C++
+**/cmake-build*/
+**/build*/
+**/*.so
+**/*.log*
+
+# Omniverse
+**/*.dmp
+**/.thumbs
+
+# No USD files allowed in the repo
+**/*.usd
+**/*.usda
+**/*.usdc
+**/*.usdz
+
+# No checkpoints
+**/*.onnx
+
+# Python
+.DS_Store
+**/*.egg-info/
+**/__pycache__/
+**/.pytest_cache/
+**/*.pyc
+**/*.pb
+
+# Docker/Singularity
+**/*.sif
+docker/cluster/exports/
+docker/.container.cfg
+
+# IDE
+**/.idea/
+**/.vscode/
+# Don't ignore the top-level .vscode directory as it is
+# used to configure VS Code settings
+!.vscode
+
+# Outputs
+**/assets/*
+**/output/*
+**/outputs/*
+**/videos/*
+**/wandb/*
+**/.neptune/*
+docker/artifacts/
+*.tmp
+
+# Doc Outputs
+**/docs/_build/*
+**/generated/*
+
+# Isaac-Sim packman
+_isaac_sim*
+_repo
+_build
+.lastformat
+
+# RL-Games
+**/runs/*
+**/logs/*
+**/recordings/*
+**/logged_videos/*
+
+
+# Pre-Trained Checkpoints
+/.pretrained_checkpoints/
+
+meta_source
+atlas
+log_images
+People
+data
+
+rl_source
+isaac_source
+autopilot
+
+assets
+tests
+debug_images
+experiments
+log_real_world
+debug_scripts
+demo_outputs
+
+**.onnx.data
+checkpoints
+sidewalkbench/models/InternVLA_N1/ckpts
+sidewalkbench/models/SocialNav/ckpts
+test_data
+
+# uv
+.venv/
+
+# sidewalkbench.gs: scene data (gs_assets/: splats, meshes, grids, annotations, pedestrians, cone) lives on disk, not in git
+/gs_assets
+scenes/
+scenes_v2/
+*.swp
+/scenes_v2
+/experiments

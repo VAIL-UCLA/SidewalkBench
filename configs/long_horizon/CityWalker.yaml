@@ -1,0 +1,4 @@
+model_type: CityWalker
+terrain_type: block_sidewalk
+scenario_type: default
+num_peds_per_terrain: 36

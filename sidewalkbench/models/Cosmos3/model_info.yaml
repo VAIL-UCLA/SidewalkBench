@@ -1,0 +1,113 @@
+name: Cosmos3-Official
+goal_type: goal_less
+image_resolution:
+- 288
+- 512
+context_size: 1
+input_fps: 5.0
+obs_normalize: false
+camera:
+  model: pinhole
+  fx: 210.667
+  fy: 210.667
+  cx: 256.0
+  cy: 144.0
+  height: 0.456
+inputs:
+  frames:
+    shape:
+    - 1
+    - 3
+    - 1
+    - 480
+    - 832
+    dtype: uint8
+    description: Current RGB frame, centre-cropped and resized to the 832x480 canvas
+      (encoder.onnx)
+  x_vision:
+    shape:
+    - 1
+    - 48
+    - 1
+    - 30
+    - 52
+    dtype: float32
+    description: Latent state; frame 0 is the encoded current frame (denoiser.onnx)
+  x_action:
+    shape:
+    - 1
+    - 60
+    - 64
+    dtype: float32
+    description: Action state; the first 9 channels are the av action (denoiser.onnx)
+  t:
+    shape:
+    - 1
+    dtype: float32
+    description: Model timestep of the denoising step (denoiser.onnx)
+outputs:
+  v_vision:
+    shape:
+    - 1
+    - 48
+    - 1
+    - 30
+    - 52
+    description: Flow velocity of the latent
+  v_action:
+    shape:
+    - 1
+    - 60
+    - 64
+    description: Flow velocity of the actions
+note: One plan = encoder + denoising_steps UniPC steps of the denoiser. It yields
+  60 per-step camera poses [t_xyz | rot6d] at 10 Hz (x right, y down, z forward; model
+  metres), integrated into body poses [x_fwd, y_left, yaw] and divided by robot_scale.
+  The controller receives the next num_waypoints of the current plan.
+num_modes: 1
+num_waypoints: 40
+output_fps: 10.0
+plan_horizon_s: 6.0
+denoising_steps: 20
+replan_interval_s: 0.4
+robot_scale: null
+mirror_ensemble: true
+files:
+- encoder.onnx
+- encoder.onnx.data
+- denoiser.onnx
+- denoiser.onnx.data
+- meta.json
+- io_spec.json
+controller:
+  type: pd
+  description: Shared benchmark PD; linear and angular velocity use waypoint 9 at
+    1 s.
+checkpoint_repository: UCLA-VAIL/Navigation-Model-Zoo-Public
+checkpoint_revision: 297b6596125bd870fc4e761f2bda5e243a5a4d29
+default_controller: pd
+checkpoint_files:
+  denoiser.onnx:
+    public_path: Cosmos3_Official/denoiser.onnx
+    sha256: 385d23ea42be5831fe90836458031a891ccdf004383ef998fd4104240860556e
+    size: 4418421
+  denoiser.onnx.data:
+    public_path: Cosmos3_Official/denoiser.onnx.data
+    sha256: c41709ce26d51cb714b4f1c223779019429ffe0783cb2cf4df29fdef48cb3c9c
+    size: 13984202752
+  encoder.onnx:
+    public_path: Cosmos3_Official/encoder.onnx
+    sha256: b2c5d802c8ced4b16d6d21e1ae07c8da79d02e9d19252df5416fe26a041da2df
+    size: 688262
+  encoder.onnx.data:
+    public_path: Cosmos3_Official/encoder.onnx.data
+    sha256: 3ab1304461c200e54108a10f4f5d6462b299ff1d250bcd896d220d913761e968
+    size: 297107456
+  io_spec.json:
+    public_path: Cosmos3_Official/io_spec.json
+    sha256: 42bf440fc162dd50f36c7e776d5b0464686f29ea0e7d834c2020cd57de68c67a
+    size: 1630
+  meta.json:
+    public_path: Cosmos3_Official/meta.json
+    sha256: 1931a15fe936d33df6c283560125fec48e895ce02af9ed4b006eb78ee2604928
+    size: 51001

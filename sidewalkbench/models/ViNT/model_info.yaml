@@ -1,0 +1,45 @@
+name: Vint_GL_Official
+goal_type: goal_less
+image_resolution: [64, 85]
+context_size: 6
+obs_normalize: true
+normalize: true
+action_stats:
+  min: [0.0, -2.0]
+  max: [5.0, 2.0]
+model_max_v: 2.5
+model_rate: 3
+metric_waypoint_spacing: 0.8
+model_fps: 4
+len_traj_pred: 5
+learn_angle: true
+inputs:
+  obs_img:
+    shape: [batch, 18, 64, 85]
+    dtype: float32
+    description: 6 RGB frames x 3 channels, ImageNet normalized; resized to image_resolution
+  goal_img:
+    shape: [batch, 3, 64, 85]
+    dtype: float32
+    description: Goal image (random noise for goal-free)
+outputs:
+  dist_pred:
+    shape: [batch, 1]
+    description: Predicted distance to goal
+  action_pred:
+    shape: [batch, 5, 4]
+    description: waypoints (cumsum'd dx,dy in dataset units; scale by metric_waypoint_spacing),
+      sin/cos heading
+onnx: vint_imagegoal.onnx
+
+checkpoint_repository: UCLA-VAIL/Navigation-Model-Zoo-Public
+checkpoint_revision: 297b6596125bd870fc4e761f2bda5e243a5a4d29
+checkpoint_files:
+  vint_imagegoal.onnx:
+    public_path: Vint_GL_Official/vint_imagegoal.onnx
+    sha256: d480bf0fc28f6c1d84f568bf28733f6b418920218e3affd6f9d59fff1506ecec
+    size: 1415900
+  vint_imagegoal.onnx.data:
+    public_path: Vint_GL_Official/vint_imagegoal.onnx.data
+    sha256: 399b8d50e7fcc812a69734fcc51f40dd313d964fec79d6fea3429252bc994791
+    size: 95748096

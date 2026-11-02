@@ -1,0 +1,21 @@
+name: S2E
+goal_type: point_goal / goal-free (random goal)
+image_resolution: [256, 256]
+context_size: 11
+obs_normalize: false
+inputs:
+  obs_images: {shape: [batch, 11, 3, 256, 256], dtype: float32, description: "11 RGB observation frames in [0,1]"}
+  goal: {shape: [batch, 3], dtype: float32, description: "Goal (x, y, yaw) in meters/rad"}
+outputs:
+  wp_pred: {shape: [batch, 10, 3], description: "10 waypoints x 3 (x, y, yaw)"}
+  wp_pred_score: {shape: [batch, 63], description: "Mode selection scores"}
+num_waypoints: 10
+output_fps: 5.0
+
+checkpoint_repository: UCLA-VAIL/Navigation-Model-Zoo-Public
+checkpoint_revision: 297b6596125bd870fc4e761f2bda5e243a5a4d29
+checkpoint_files:
+  s2e.onnx:
+    public_path: S2E/s2e.onnx
+    sha256: ee1410ab55a54946cf25323e82b3be2a8cb106e2ccb2ad878e7638839686108a
+    size: 381993971

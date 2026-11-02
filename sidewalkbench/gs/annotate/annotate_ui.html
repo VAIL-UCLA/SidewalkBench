@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scene Annotator</title>
+<style>
+  :root {
+    --bg: #0d0f13; --panel: #14171d; --panel-2: #1a1e26; --line: #252a34; --text: #e6e8ec;
+    --muted: #8a92a3; --faint: #5b6273; --accent: #7c9cff;
+    --sh: #38bdf8; --lh: #c084fc; --cocoa: #facc15; --cone: #fb923c; --static: #34d399; --dynamic: #fb7185; --region: #4ade80;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
+  body { display: grid; grid-template-columns: 300px 1fr; overflow: hidden; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column;
+    min-height: 0; }
+  .brand { padding: 18px 18px 14px; border-bottom: 1px solid var(--line); }
+  .brand h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: .2px; }
+  .brand p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+  .scroll { overflow-y: auto; flex: 1; padding: 6px 0 18px; }
+  section { padding: 14px 18px 4px; }
+  section > h2 { margin: 0 0 10px; font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .8px; color: var(--faint); display: flex; justify-content: space-between; align-items: center; }
+  section > h2 .count { color: var(--muted); font-weight: 500; letter-spacing: 0; text-transform: none; }
+
+  .scene-row { display: flex; gap: 6px; }
+  select { flex: 1; min-width: 0; appearance: none; background: var(--panel-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a92a3' fill='none' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;
+    color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 28px 8px 10px; font: inherit; cursor: pointer; }
+  select:focus { outline: none; border-color: var(--accent); }
+  .icon-btn { width: 34px; flex: none; display: grid; place-items: center; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 8px; color: var(--muted); cursor: pointer; }
+  .icon-btn:hover { color: var(--text); border-color: #343a47; }
+  .icon-btn svg { width: 14px; height: 14px; }
+
+  .tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .tool { display: flex; align-items: center; gap: 8px; padding: 9px 10px; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: inherit; cursor: pointer;
+    text-align: left; transition: border-color .12s, background .12s; }
+  .tool:hover:not(:disabled) { border-color: #343a47; }
+  .tool.active { border-color: var(--c, var(--accent)); background: color-mix(in srgb, var(--c, var(--accent)) 12%, var(--panel-2)); }
+  .tool:disabled { opacity: .38; cursor: not-allowed; }
+  .tool .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c, var(--muted)); flex: none; }
+  .tool .tri { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-bottom: 9px solid var(--cone); flex: none; }
+  .tool svg { width: 13px; height: 13px; flex: none; color: var(--muted); }
+  .tool.wide { grid-column: span 2; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 5px 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line);
+    color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; text-transform: capitalize; }
+  .chip:hover { color: var(--text); }
+  .chip.active { color: var(--text); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--panel-2)); }
+
+  .list { display: flex; flex-direction: column; gap: 4px; }
+  .item { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 10px; border-radius: 8px;
+    border: 1px solid transparent; cursor: pointer; }
+  .item:hover { background: var(--panel-2); }
+  .item.selected { background: var(--panel-2); border-color: var(--line); }
+  .item .bar { width: 3px; align-self: stretch; border-radius: 2px; background: var(--c); flex: none; }
+  .item .main { flex: 1; min-width: 0; }
+  .item .title { font-weight: 500; }
+  .item .sub { color: var(--muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .del { opacity: 0; border: 0; background: none; color: var(--faint); cursor: pointer; padding: 4px;
+    border-radius: 6px; display: grid; place-items: center; }
+  .item:hover .del { opacity: 1; }
+  .item .del:hover { color: #f87171; background: #2a1d22; }
+  .item .del svg { width: 14px; height: 14px; }
+  .badge { display: inline-block; font-size: 10.5px; font-weight: 600; padding: 1px 6px; border-radius: 4px;
+    margin-left: 6px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); vertical-align: 1px; }
+  .empty { color: var(--faint); font-size: 12px; padding: 4px 0 8px; }
+  .note { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; font-size: 12px; color: #fcd34d;
+    background: color-mix(in srgb, #fcd34d 8%, transparent); border: 1px solid color-mix(in srgb, #fcd34d 22%, transparent); }
+  .note code { font-size: 11px; color: #fde68a; }
+
+  footer { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; gap: 6px; }
+  footer .tool { flex: 1; justify-content: center; }
+
+  main { position: relative; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  canvas.grab { cursor: grabbing; }
+  .hint { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); padding: 9px 16px;
+    border-radius: 999px; background: rgba(20, 23, 29, .88); backdrop-filter: blur(8px); border: 1px solid var(--line);
+    font-size: 12.5px; color: var(--text); pointer-events: none; white-space: nowrap; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+  .hint b { color: var(--hc, var(--accent)); font-weight: 600; }
+  .hint:empty { display: none; }
+  .hud { position: absolute; bottom: 14px; left: 16px; display: flex; gap: 8px; align-items: center; }
+  .pill { padding: 5px 10px; border-radius: 999px; background: rgba(20, 23, 29, .85); border: 1px solid var(--line);
+    color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .zoom { position: absolute; bottom: 14px; right: 16px; display: flex; flex-direction: column; border-radius: 10px;
+    overflow: hidden; border: 1px solid var(--line); background: rgba(20, 23, 29, .85); }
+  .zoom button { width: 34px; height: 32px; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; }
+  .zoom button:hover { color: var(--text); background: var(--panel-2); }
+  .zoom button + button { border-top: 1px solid var(--line); }
+  .saved { transition: opacity .4s; }
+  .saved.ok { color: #86efac; }
+  .saved.err { color: #fca5a5; }
+  .loading { position: absolute; inset: 0; display: grid; place-items: center; background: var(--bg); color: var(--muted);
+    font-size: 13px; transition: opacity .25s; }
+  .loading.hidden { opacity: 0; pointer-events: none; }
+  .spinner { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent);
+    animation: spin .8s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand">
+    <h1>Scene Annotator</h1>
+    <p>Routes, cones and pedestrians · sidewalkbench</p>
+  </div>
+  <div class="scroll">
+    <section>
+      <h2>Scene <span class="count" id="sceneCount"></span></h2>
+      <div class="scene-row">
+        <button class="icon-btn" id="prevScene" title="Previous scene"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 3L5 8l5 5"/></svg></button>
+        <select id="scene"></select>
+        <button class="icon-btn" id="nextScene" title="Next scene"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3l5 5-5 5"/></svg></button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Tools</h2>
+      <div class="tools">
+        <button class="tool" data-tool="select"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 2l10 5.5-4.5 1L6.5 13z"/></svg>Select</button>
+        <button class="tool" data-tool="short_horizon" style="--c: var(--sh)"><span class="dot"></span>Short route</button>
+        <button class="tool" data-tool="long_horizon" style="--c: var(--lh)"><span class="dot"></span>Long route</button>
+        <button class="tool" data-tool="static" style="--c: var(--static)"><span class="dot"></span>Static ped.</button>
+        <button class="tool" data-tool="dynamic" style="--c: var(--dynamic)"><span class="dot"></span>Dynamic ped.</button>
+        <button class="tool" data-tool="cone" style="--c: var(--cone)"><span class="dot"></span>Cone</button>
+        <button class="tool" data-tool="erase" style="--c: #f87171"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 14h8M2.5 9.5l6-6a1.5 1.5 0 012 0l2 2a1.5 1.5 0 010 2L8 12H5z"/></svg>Erase</button>
+        <button class="tool" data-tool="region" style="--c: var(--region)"><span class="dot"></span>Route region</button>
+        <button class="tool" data-tool="ruler" style="--c: #facc15"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 11l9-9 3 3-9 9z M5 8l1.5 1.5 M7 6l1.5 1.5 M9 4l1.5 1.5"/></svg>Ruler</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Layers</h2>
+      <div class="tools">
+        <button class="tool wide" id="walkToggle" style="--c: #4ade80" title="The semantic grid's walkable cells: the robot is off-sidewalk more than 1 m from the walkable region its route is on"><span class="dot"></span>Walkable region</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Pedestrian identity</h2>
+      <div class="chips" id="identities"></div>
+    </section>
+
+    <section>
+      <h2>Routes <span class="count" id="routeCount"></span></h2>
+      <div class="list" id="routes"></div>
+    </section>
+
+    <section id="regionSection">
+      <h2>Route region <span class="count" id="regionState"></span></h2>
+      <div class="tools">
+        <button class="tool" id="regionAuto" title="Replace the selected route's region with the automatic guess from the semantic grid (walkable cross-sections along the route); then fix it by hand"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5l1.6 3.7 3.9.4-2.9 2.6.9 3.9L8 10.1l-3.5 2 .9-3.9L2.5 5.6l3.9-.4z"/></svg>Auto-fill</button>
+        <button class="tool" id="regionCopy" title="Copy the selected route's region (then select another route of this scene and Paste)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3.5 10.5h-1v-8h8v1"/></svg>Copy</button>
+        <button class="tool" id="regionPaste" title="Give the selected route the copied region (replaces its own)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="3" width="9" height="11" rx="1.5"/><path d="M6 3V2h4v1M6 7h4M6 10h4"/></svg>Paste</button>
+        <button class="tool" id="regionClear" title="Remove the selected route's region"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>Clear</button>
+      </div>
+      <div class="empty" id="regionHelp" style="margin-top:8px">Off-sidewalk = more than 1 m outside the route's region (yellow line).</div>
+    </section>
+
+    <section id="pedSection">
+      <h2>Pedestrians <span class="count" id="pedCount"></span></h2>
+      <div class="list" id="peds"></div>
+    </section>
+
+    <section>
+      <h2>Cones <span class="count" id="coneCount"></span></h2>
+      <div class="list" id="cones"></div>
+    </section>
+  </div>
+  <footer>
+    <button class="tool" id="undo"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h6a3.5 3.5 0 010 7H7M4 6l3-3M4 6l3 3"/></svg>Undo</button>
+    <button class="tool" id="fit"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg>Fit view</button>
+  </footer>
+</aside>
+
+<main>
+  <canvas id="map"></canvas>
+  <div class="hint" id="hint"></div>
+  <div class="hud"><span class="pill" id="coords">—</span><span class="pill saved" id="saved">All changes saved</span></div>
+  <div class="zoom"><button id="zin" title="Zoom in">+</button><button id="zout" title="Zoom out">−</button></div>
+  <div class="loading" id="loading"><div><div class="spinner"></div><span id="loadingText">Loading…</span></div></div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const COLORS = { short_horizon: css('--sh'), long_horizon: css('--lh'), cocoa: css('--cocoa'), cone: css('--cone'),
+                 static: css('--static'), dynamic: css('--dynamic'), region: css('--region') };
+const REGION_BUFFER_M = 1.0;  // the eval's off-sidewalk margin around the region
+const TRASH = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>';
+const PICK_PX = 14;
+
+const S = { scenes: [], identities: [], scene: null, ann: null, lines: [], extent: null, img: null,
+            tool: 'select', pending: [], sel: null, ident: 0, history: [], mouse: null,
+            view: { cx: 0, cy: 0, scale: 4 } };
+const canvas = $('map'), ctx = canvas.getContext('2d');
+
+// ------------------------------------------------------------------ geometry
+function project(poly, p) {           // nearest point on a polyline -> {q, d, i}
+  let best = { d: Infinity };
+  for (let i = 0; i + 1 < poly.length; i++) {
+    const [ax, ay] = poly[i], [bx, by] = poly[i + 1], dx = bx - ax, dy = by - ay;
+    const L = dx * dx + dy * dy, t = L > 1e-12 ? Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / L)) : 0;
+    const q = [ax + t * dx, ay + t * dy], d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    if (d < best.d) best = { q, d, i };
+  }
+  return best;
+}
+const closedPoly = (c) => c.closed ? c.xy.concat([c.xy[0]]) : c.xy;
+const polyLen = (p) => p.reduce((s, q, i) => i ? s + Math.hypot(q[0] - p[i - 1][0], q[1] - p[i - 1][1]) : 0, 0);
+const r4 = (v) => Math.round(v * 1e4) / 1e4;
+const deg = (a) => Math.round(a * 180 / Math.PI * 100) / 100;
+function nearestLine(p) {  // snap: the nearest point on a centerline or a bridge (connector)
+  let best = null;
+  for (const c of S.lines.concat(S.connectors.map((xy) => ({ xy, closed: false })))) {
+    const pr = project(closedPoly(c), p); if (!best || pr.d < best.d) best = { ...pr, c };
+  }
+  return best;
+}
+
+// ------------------------------------------------------------------ view
+const W = () => canvas.clientWidth, H = () => canvas.clientHeight;
+const toScreen = ([x, y]) => [W() / 2 + (x - S.view.cx) * S.view.scale, H() / 2 - (y - S.view.cy) * S.view.scale];
+const toWorld = ([sx, sy]) => [S.view.cx + (sx - W() / 2) / S.view.scale, S.view.cy - (sy - H() / 2) / S.view.scale];
+function fit() {
+  if (!S.extent) return;
+  const [x0, x1, y0, y1] = S.extent;
+  // fit to the centerlines (the annotated area) with a margin, not the whole capture
+  let xs = [], ys = [];
+  for (const c of S.lines) for (const [x, y] of c.xy) { xs.push(x); ys.push(y); }
+  const bx0 = xs.length ? Math.min(...xs) - 8 : x0, bx1 = xs.length ? Math.max(...xs) + 8 : x1;
+  const by0 = ys.length ? Math.min(...ys) - 8 : y0, by1 = ys.length ? Math.max(...ys) + 8 : y1;
+  S.view = { cx: (bx0 + bx1) / 2, cy: (by0 + by1) / 2, scale: Math.min(W() / (bx1 - bx0), H() / (by1 - by0)) };
+  draw();
+}
+function zoomAt(sx, sy, f) {
+  const before = toWorld([sx, sy]);
+  S.view.scale = Math.max(0.3, Math.min(400, S.view.scale * f));
+  const after = toWorld([sx, sy]);
+  S.view.cx += before[0] - after[0]; S.view.cy += before[1] - after[1];
+  draw();
+}
+
+// ------------------------------------------------------------------ drawing
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = W() * dpr; canvas.height = H() * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+function pathOf(poly) { ctx.beginPath(); poly.forEach((p, i) => { const [x, y] = toScreen(p); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); }
+function arrow(p, yaw, len, color, width = 2.2) {
+  const [x, y] = toScreen(p), ex = x + Math.cos(yaw) * len, ey = y - Math.sin(yaw) * len, a = -yaw;
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ex + Math.cos(a) * 3, ey + Math.sin(a) * 3);
+  ctx.lineTo(ex + Math.cos(a + 2.5) * 8, ey + Math.sin(a + 2.5) * 8);
+  ctx.lineTo(ex + Math.cos(a - 2.5) * 8, ey + Math.sin(a - 2.5) * 8); ctx.closePath(); ctx.fill();
+}
+function disc(p, r, fill, ring = 'rgba(13,15,19,.9)') {
+  const [x, y] = toScreen(p);
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fillStyle = fill; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = ring; ctx.stroke();
+}
+function label(p, text, color, dx = 10, dy = -10) {
+  const [x, y] = toScreen(p);
+  ctx.font = '600 11px ui-sans-serif, system-ui, sans-serif';
+  const w = ctx.measureText(text).width;
+  ctx.fillStyle = 'rgba(13,15,19,.82)';
+  ctx.beginPath(); ctx.roundRect(x + dx - 5, y + dy - 11, w + 10, 16, 4); ctx.fill();
+  ctx.fillStyle = color; ctx.fillText(text, x + dx, y + dy + 1);
+}
+function cone(c) {  // the cone's true footprint (radius from its mesh), filled once settled
+  const [x, y] = toScreen(c.xy), r = Math.max(2, S.coneRadius * S.view.scale);
+  ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI);
+  ctx.fillStyle = c.settled ? 'rgba(251,146,60,.45)' : 'rgba(13,15,19,.35)'; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = COLORS.cone; ctx.setLineDash(c.settled ? [] : [4, 3]); ctx.stroke(); ctx.setLineDash([]);
+}
+function draw() {
+  ctx.clearRect(0, 0, W(), H());
+  ctx.fillStyle = css('--bg'); ctx.fillRect(0, 0, W(), H());
+  if (!S.ann) return;
+  if (S.img) {
+    const [x0, x1, y0, y1] = S.extent, [sx, sy] = toScreen([x0, y1]);
+    ctx.imageSmoothingEnabled = S.view.scale < 12;
+    ctx.drawImage(S.img, sx, sy, (x1 - x0) * S.view.scale, (y1 - y0) * S.view.scale);
+  }
+  if (S.showWalk && S.walk && S.walk.scene === S.scene) {  // the off-sidewalk check's walkable cells (semantic grid)
+    const [x0, x1, y0, y1] = S.walk.extent, [sx, sy] = toScreen([x0, y1]);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(S.walk.img, sx, sy, (x1 - x0) * S.view.scale, (y1 - y0) * S.view.scale);
+  }
+  // scene centerlines
+  // each drawn twice, dark under light, so it reads on bright pavement as well as on dark ground
+  const haloed = (polys, dash, width, color) => {
+    ctx.setLineDash(dash); ctx.lineCap = 'round';
+    for (const [w, c] of [[width + 2.5, 'rgba(13,15,19,.7)'], [width, color]]) {
+      ctx.lineWidth = w; ctx.strokeStyle = c; for (const p of polys) { pathOf(p); ctx.stroke(); }
+    }
+    ctx.setLineDash([]);
+  };
+  haloed(S.lines.map(closedPoly), [7, 6], 1.6, 'rgba(255,255,255,.9)');
+  haloed(S.connectors, [0.5, 5], 3, '#ffffff');  // connectors: where a route crosses between centerlines (ramps)
+  drawRegions();
+  // routes (selected last, on top)
+  const order = S.ann.routes.map((_, i) => i).sort((a, b) => (a === S.sel) - (b === S.sel));
+  for (const i of order) {
+    const r = S.ann.routes[i], col = COLORS[r.mode], on = i === S.sel;
+    pathOf(r.centerline_xy);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    if (on) { ctx.lineWidth = 9; ctx.strokeStyle = 'rgba(13,15,19,.55)'; ctx.stroke(); }
+    ctx.lineWidth = on ? 4.5 : 2.5; ctx.strokeStyle = col; ctx.globalAlpha = on ? 1 : .75; ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.setLineDash([2, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = col;  // start / goal to their projections
+    for (const [p, q] of [[r.start.xy, r.centerline_xy[0]], [r.goal.xy, r.centerline_xy[r.centerline_xy.length - 1]]]) {
+      pathOf([p, q]); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    arrow(r.start.xy, r.start.yaw_deg * Math.PI / 180, on ? 26 : 18, col, on ? 2.6 : 2);
+    disc(r.start.xy, on ? 6 : 4.5, col);
+    const [gx, gy] = toScreen(r.goal.xy), g = on ? 6 : 4.5;
+    ctx.lineWidth = 2.5; ctx.strokeStyle = col; ctx.beginPath();
+    ctx.moveTo(gx - g, gy - g); ctx.lineTo(gx + g, gy + g); ctx.moveTo(gx + g, gy - g); ctx.lineTo(gx - g, gy + g); ctx.stroke();
+    label(r.start.xy, r.id, col);
+  }
+  for (const c of S.ann.cones) cone(c);
+  const r = S.ann.routes[S.sel];
+  if (r) {
+    for (const p of r.static_pedestrians) { arrow(p.xy, p.yaw_deg * Math.PI / 180, 18, COLORS.static, 2); disc(p.xy, 6.5, COLORS.static); label(p.xy, p.identity, COLORS.static, 10, 4); }
+    for (const p of r.dynamic_pedestrians) { disc(p.xy, 6.5, COLORS.dynamic); label(p.xy, p.identity, COLORS.dynamic, 10, 4); }
+  }
+  drawPending();
+  drawRuler();
+  drawScaleBar();
+}
+function drawRegions() {  // every route's region (outline); the selected one filled, with its 1 m off-sidewalk limit
+  S.ann.routes.forEach((r, i) => {
+    if (!r.region_xy || r.region_xy.length < 3) return;
+    const on = i === S.sel, poly = r.region_xy.concat([r.region_xy[0]]);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    if (on) {
+      pathOf(poly); ctx.lineWidth = 2 * REGION_BUFFER_M * S.view.scale; ctx.strokeStyle = 'rgba(250,204,21,.16)'; ctx.stroke();
+      pathOf(poly); ctx.fillStyle = 'rgba(74,222,128,.22)'; ctx.fill();
+      pathOf(poly); ctx.lineWidth = 2; ctx.strokeStyle = COLORS.region; ctx.stroke();
+      if (S.tool === 'region') for (const q of r.region_xy) {
+        const [x, y] = toScreen(q); ctx.fillStyle = '#0d0f13'; ctx.fillRect(x - 4.5, y - 4.5, 9, 9);
+        ctx.lineWidth = 2; ctx.strokeStyle = COLORS.region; ctx.strokeRect(x - 4.5, y - 4.5, 9, 9);
+      }
+    } else {
+      pathOf(poly); ctx.setLineDash([5, 4]); ctx.lineWidth = 1.3; ctx.strokeStyle = 'rgba(74,222,128,.7)'; ctx.stroke(); ctx.setLineDash([]);
+    }
+  });
+}
+function inPoly(poly, [x, y]) {  // ray casting
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function containsLine(poly, line, step = 0.1) {  // every point of the polyline (sampled every step m) inside poly
+  for (let i = 0; i + 1 < line.length; i++) {
+    const [ax, ay] = line[i], [bx, by] = line[i + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / step));
+    for (let k = 0; k <= n; k++) if (!inPoly(poly, [ax + (bx - ax) * k / n, ay + (by - ay) * k / n])) return false;
+  }
+  return true;
+}
+// A route's region is given to every other route of the same mode whose centerline lies completely inside it
+// (region_source = the route it came from). Copies follow later edits of the source and are dropped when the
+// route no longer fits or the source is cleared; a region drawn or edited on a route itself is never overwritten.
+function regionEdited(src) {
+  delete src.region_source;  // edited here: its own region now
+  shareRegion(src);
+}
+function shareRegion(src) {
+  for (const o of S.ann.routes) {
+    if (o === src || o.mode !== src.mode) continue;
+    const mine = o.region_source === src.id;
+    if (!(mine || !o.region_xy)) continue;
+    if (src.region_xy && src.region_xy.length >= 3 && containsLine(src.region_xy, o.centerline_xy)) {
+      o.region_xy = JSON.parse(JSON.stringify(src.region_xy)); o.region_source = src.id;
+    } else if (mine) { delete o.region_xy; delete o.region_source; }
+  }
+}
+function shareAllRegions() {  // on load: own regions -> the routes they contain (regions drawn before sharing existed)
+  const before = JSON.stringify(S.ann.routes.map((r) => [r.region_xy, r.region_source]));
+  for (const r of S.ann.routes) if (r.region_xy && !r.region_source) shareRegion(r);
+  return JSON.stringify(S.ann.routes.map((r) => [r.region_xy, r.region_source])) !== before;
+}
+function nearVertex(poly, p) {  // index of the vertex within PICK_PX of p, or -1
+  let best = -1, bd = PICK_PX;
+  poly.forEach((q, i) => { const d = Math.hypot(q[0] - p[0], q[1] - p[1]) * S.view.scale; if (d < bd) { bd = d; best = i; } });
+  return best;
+}
+function drawRuler() {  // the measured segment (or the live one while placing its end) with its length
+  const a = S.ruler && S.ruler.a, b = S.ruler && (S.ruler.b || (S.tool === 'ruler' ? S.mouse : null));
+  if (!a) return;
+  const col = '#facc15', [ax, ay] = toScreen(a);
+  ctx.lineCap = 'round';
+  if (b) {
+    const [bx, by] = toScreen(b), len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    for (const [w, c] of [[5, 'rgba(13,15,19,.7)'], [2.5, col]]) {
+      ctx.lineWidth = w; ctx.strokeStyle = c; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    }
+    disc(b, 4, col);
+    const t = `${len.toFixed(2)} m`; ctx.font = '600 12.5px ui-sans-serif, system-ui, sans-serif';
+    const w = ctx.measureText(t).width, mx = (ax + bx) / 2, my = (ay + by) / 2;
+    ctx.fillStyle = 'rgba(13,15,19,.85)'; ctx.beginPath(); ctx.roundRect(mx - w / 2 - 7, my - 22, w + 14, 20, 5); ctx.fill();
+    ctx.fillStyle = col; ctx.fillText(t, mx - w / 2, my - 8);
+  }
+  disc(a, 4, col);
+}
+function drawScaleBar() {  // bottom-right: a round length about 100 px long
+  const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 200];
+  const m = steps.find((v) => v * S.view.scale >= 70) || steps[steps.length - 1], px = m * S.view.scale;
+  const x1 = W() - 70, x0 = x1 - px, y = H() - 22;
+  ctx.lineCap = 'butt';
+  for (const [w, c] of [[6, 'rgba(13,15,19,.7)'], [2, '#e6e8ec']]) {
+    ctx.lineWidth = w; ctx.strokeStyle = c; ctx.beginPath();
+    ctx.moveTo(x0, y - 5); ctx.lineTo(x0, y); ctx.lineTo(x1, y); ctx.lineTo(x1, y - 5); ctx.stroke();
+  }
+  const t = `${m} m`; ctx.font = '600 11.5px ui-sans-serif, system-ui, sans-serif';
+  const w = ctx.measureText(t).width;
+  ctx.fillStyle = 'rgba(13,15,19,.75)'; ctx.fillRect((x0 + x1) / 2 - w / 2 - 4, y - 21, w + 8, 15);
+  ctx.fillStyle = '#e6e8ec'; ctx.fillText(t, (x0 + x1) / 2 - w / 2, y - 9);
+}
+function tie(p, col) {  // dotted line from a start / goal to its projection on the nearest centerline / bridge
+  const n = nearestLine(p); if (!n) return;
+  const [ax, ay] = toScreen(p), [bx, by] = toScreen(n.q);
+  ctx.setLineDash([2, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = col;
+  ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(bx, by, 3, 0, 2 * Math.PI); ctx.stroke();
+}
+function drawPending() {
+  const m = S.mouse, t = S.tool, P = S.pending;
+  if (t === 'short_horizon' || t === 'long_horizon') {
+    const col = COLORS[t];
+    if (P.length === 0 && m) { tie(m, col); disc(m, 5, col); }
+    if (P.length >= 1) {
+      disc(P[0].q, 6, col);
+      const face = P.length >= 2 ? P[1] : m;
+      if (face) arrow(P[0].q, Math.atan2(face[1] - P[0].q[1], face[0] - P[0].q[0]), 26, col, 2.6);
+    }
+    if (P.length >= 1) tie(P[0].q, col);
+    if (P.length === 2 && m) { tie(m, col); disc(m, 5, col); }
+  } else if ((t === 'static' || t === 'dynamic') && S.ann.routes[S.sel]) {
+    const col = COLORS[t];
+    if (P.length === 1) { if (m) arrow(P[0], Math.atan2(m[1] - P[0][1], m[0] - P[0][0]), 18, col, 2); disc(P[0], 6.5, col); }
+    else if (m) { const q = t === 'static' ? m : project(S.ann.routes[S.sel].centerline_xy, m).q;  // static: where clicked
+      ctx.globalAlpha = .6; disc(q, 6.5, col); ctx.globalAlpha = 1; }
+  } else if (t === 'cone' && m) { ctx.globalAlpha = .6; cone({ xy: m, settled: true }); ctx.globalAlpha = 1; }
+  else if (t === 'region' && P.length) {
+    const pts = m ? P.concat([m]) : P;
+    ctx.lineWidth = 2; ctx.strokeStyle = COLORS.region; ctx.setLineDash([6, 4]); pathOf(pts); ctx.stroke(); ctx.setLineDash([]);
+    P.forEach((q, i) => disc(q, i === 0 ? 6 : 4, COLORS.region));
+  }
+}
+
+// ------------------------------------------------------------------ UI panels
+function hint() {
+  const t = S.tool, n = S.pending.length, h = $('hint');
+  const route = { 0: 'Click the <b>start</b> anywhere — the route uses its projection on the nearest centerline or bridge', 1: 'Click the direction the robot <b>faces</b>', 2: 'Click the <b>goal</b> anywhere — the route ends at its projection on the nearest centerline or bridge' };
+  const msg = {
+    select: S.ann && S.ann.routes.length ? 'Click a route to select it · drag to pan · scroll to zoom' : 'No routes yet — pick <b>Short route</b> or <b>Long route</b>',
+    short_horizon: route[n], long_horizon: route[n],
+    static: n ? 'Click the direction the pedestrian <b>faces</b>' : 'Click anywhere to place a <b>standing</b> pedestrian on the selected route',
+    dynamic: 'Click on the selected route to place a <b>walking</b> pedestrian — it walks toward the robot',
+    ruler: S.ruler && S.ruler.a && !S.ruler.b ? 'Click the second point' : 'Click two points to <b>measure</b> the distance between them',
+    region: !(S.ann && S.ann.routes[S.sel]) ? 'Select a route first'
+      : S.ann.routes[S.sel].region_xy ? '<b>Drag</b> a corner · click an <b>edge</b> to add a corner · <b>Shift+click</b> a corner to remove it'
+      : n >= 3 ? 'Click the <b>first corner</b> or press <b>Enter</b> to close the region · Backspace removes the last corner'
+      : 'Click the <b>corners</b> of the walkable area this route runs on — or use <b>Auto-fill</b>',
+    cone: 'Click to place a <b>cone</b>', erase: 'Click a cone or a pedestrian to <b>remove</b> it',
+  }[t];
+  h.style.setProperty('--hc', COLORS[t] || css('--accent'));
+  h.innerHTML = msg || '';
+}
+function setTool(t) {
+  if ((t === 'static' || t === 'dynamic' || t === 'region') && S.sel == null) return;
+  S.tool = t; S.pending = [];
+  document.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
+  hint(); draw();
+}
+function item({ color, title, badge, sub, selected, onClick, onDelete }) {
+  const el = document.createElement('div');
+  el.className = 'item' + (selected ? ' selected' : '');
+  el.style.setProperty('--c', color);
+  el.innerHTML = `<span class="bar"></span><div class="main"><div class="title">${title}${badge ? `<span class="badge">${badge}</span>` : ''}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div><button class="del" title="Delete">${TRASH}</button>`;
+  el.onclick = onClick || null;
+  el.querySelector('.del').onclick = (e) => { e.stopPropagation(); onDelete(); };
+  return el;
+}
+function panels() {
+  const A = S.ann;
+  $('sceneCount').textContent = `${S.scenes.indexOf(S.scene) + 1} / ${S.scenes.length}`;
+  const routes = $('routes'); routes.innerHTML = '';
+  $('routeCount').textContent = A.routes.length || '';
+  if (!A.routes.length) routes.innerHTML = '<div class="empty">No routes yet.</div>';
+  A.routes.forEach((r, i) => routes.appendChild(item({
+    color: COLORS[r.mode], title: r.id, badge: { short_horizon: 'SHORT', long_horizon: 'LONG', cocoa: 'COCOA' }[r.mode],
+    sub: `${polyLen(r.centerline_xy).toFixed(1)} m · ${r.region_xy ? (r.region_source ? `region from ${r.region_source}` : 'region ✓') : 'no region'} · ${r.static_pedestrians.length} static · ${r.dynamic_pedestrians.length} dynamic`,
+    selected: i === S.sel, onClick: () => { S.sel = i; if (['static', 'dynamic'].includes(S.tool)) S.pending = []; refresh(); },
+    onDelete: () => edit(() => { A.routes.splice(i, 1); S.sel = A.routes.length ? Math.min(S.sel ?? 0, A.routes.length - 1) : null; }),
+  })));
+  const r = A.routes[S.sel], peds = $('peds'); peds.innerHTML = '';
+  $('pedSection').querySelector('h2').firstChild.textContent = r ? `Pedestrians · ${r.id} ` : 'Pedestrians ';
+  const all = r ? [...r.static_pedestrians.map((p, j) => ['static', p, j]), ...r.dynamic_pedestrians.map((p, j) => ['dynamic', p, j])] : [];
+  $('pedCount').textContent = all.length || '';
+  if (!r) peds.innerHTML = '<div class="empty">Select a route to add pedestrians.</div>';
+  else if (!all.length) peds.innerHTML = '<div class="empty">None on this route.</div>';
+  for (const [kind, p, j] of all) peds.appendChild(item({
+    color: COLORS[kind], title: p.identity, badge: kind === 'static' ? 'STATIC' : 'DYNAMIC',
+    sub: kind === 'static' ? `facing ${Math.round(p.yaw_deg)}°` : 'walks toward the robot',
+    onDelete: () => edit(() => r[`${kind}_pedestrians`].splice(j, 1)),
+  }));
+  const cones = $('cones'); cones.innerHTML = '';
+  $('coneCount').textContent = A.cones.length || '';
+  if (!A.cones.length) cones.innerHTML = '<div class="empty">No cones.</div>';
+  A.cones.forEach((c, i) => cones.appendChild(item({
+    color: COLORS.cone, title: c.id, sub: c.settled ? 'settled' : 'not settled yet',
+    onDelete: () => edit(() => A.cones.splice(i, 1)),
+  })));
+  const unsettled = A.cones.filter((c) => !c.settled).length;
+  if (unsettled) cones.insertAdjacentHTML('beforeend', `<div class="note">${unsettled} cone${unsettled > 1 ? 's' : ''} to settle before the eval: <code>prepare_scene.sh ${S.scene}</code></div>`);
+  document.querySelectorAll('[data-tool=static],[data-tool=dynamic],[data-tool=region]').forEach((b) => { b.disabled = S.sel == null; b.title = S.sel == null ? 'Select a route first' : ''; });
+  if (S.sel == null && ['static', 'dynamic', 'region'].includes(S.tool)) setTool('select');
+  const done = A.routes.filter((x) => x.region_xy).length;
+  $('regionState').textContent = A.routes.length ? `${done} / ${A.routes.length} routes` : '';
+  $('regionAuto').disabled = !r; $('regionClear').disabled = !(r && r.region_xy);
+  const clip = S.regionClip && S.regionClip.scene === S.scene ? S.regionClip : null;
+  $('regionCopy').disabled = !(r && r.region_xy);
+  $('regionPaste').disabled = !(r && clip && clip.from !== r.id);
+  $('regionPaste').title = clip ? `Give the selected route ${clip.from}'s region (replaces its own)` : 'Copy a region first';
+  $('regionHelp').textContent = r ? (r.region_xy ? `${r.id}: ${r.region_xy.length} corners${r.region_source ? ` (copied from ${r.region_source}: follows its edits; editing it here makes it ${r.id}'s own)` : ''} · off-sidewalk = more than 1 m outside it (yellow band)` : `${r.id} has no region yet — the eval falls back to the semantic grid + 2.5 m rule`) : 'Select a route.';
+  $('undo').disabled = !S.history.length;
+}
+function identities() {
+  const box = $('identities'); box.innerHTML = '';
+  S.identities.forEach((id, k) => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (k === S.ident ? ' active' : ''); b.textContent = id;
+    b.onclick = () => { S.ident = k; identities(); };
+    box.appendChild(b);
+  });
+}
+const refresh = () => { panels(); hint(); draw(); };
+
+// ------------------------------------------------------------------ data
+async function api(path, body) {
+  const res = await fetch(path, body === undefined ? {} : { method: 'POST', body: JSON.stringify(body) });
+  const out = await res.json();
+  if (!res.ok || out.error) throw new Error(out.error || res.statusText);
+  return out;
+}
+let saveTimer;
+async function save() {
+  const el = $('saved');
+  try { await api(`/api/save?name=${S.scene}`, S.ann); el.textContent = 'Saved'; el.className = 'pill saved ok'; }
+  catch (e) { el.textContent = 'Save failed: ' + e.message; el.className = 'pill saved err'; return; }
+  clearTimeout(saveTimer); saveTimer = setTimeout(() => { el.textContent = 'All changes saved'; el.className = 'pill saved'; }, 1400);
+}
+function edit(fn) {
+  S.history.push(JSON.stringify({ ann: S.ann, sel: S.sel }));
+  if (S.history.length > 100) S.history.shift();
+  fn(); refresh(); save();
+}
+function undo() {
+  if (!S.history.length) return;
+  const h = JSON.parse(S.history.pop()); S.ann = h.ann; S.sel = h.sel; S.pending = []; refresh(); save();
+}
+async function loadScene(name) {
+  $('loading').classList.remove('hidden'); $('loadingText').textContent = `Loading ${name}…`;
+  const d = await api(`/api/scene?name=${name}`);
+  const img = new Image(); img.src = `/api/bev.png?name=${name}&t=${Date.now()}`;
+  await img.decode();
+  Object.assign(S, { scene: name, ann: d.annotation, lines: d.centerlines, connectors: d.connectors, extent: d.extent, img, ruler: null,
+                     pending: [], history: [], sel: d.annotation.routes.length ? 0 : null });
+  $('scene').value = name;
+  if (shareAllRegions()) save();
+  fit(); setTool('select'); refresh();
+  $('loading').classList.add('hidden');
+  if (S.showWalk) loadWalk();
+}
+async function loadWalk() {  // the walkable-region overlay of the current scene (loaded on demand)
+  if (S.walk && S.walk.scene === S.scene) return draw();
+  const name = S.scene, d = await api(`/api/walkable?name=${name}`);
+  const img = new Image(); img.src = `/api/walkable.png?name=${name}&t=${Date.now()}`;
+  await img.decode();
+  if (name === S.scene) { S.walk = { scene: name, extent: d.extent, img }; draw(); }
+}
+function setWalk(on) {
+  S.showWalk = on; $('walkToggle').classList.toggle('active', on);
+  try { localStorage.setItem('annot.showWalk', on ? '1' : '0'); } catch (e) {}
+  if (on) loadWalk(); else draw();
+}
+const nextId = (items, prefix, re) => prefix + (1 + Math.max(0, ...items.map((x) => +((x.id.match(re) || [])[1] || 0))));
+
+// ------------------------------------------------------------------ clicks
+async function click(p, ev) {
+  const A = S.ann, t = S.tool, r = A.routes[S.sel];
+  if (t === 'select') {
+    let best = null;
+    A.routes.forEach((rt, i) => { const d = project(rt.centerline_xy, p).d * S.view.scale; if (d < PICK_PX && (!best || d < best.d)) best = { i, d }; });
+    S.sel = best ? best.i : S.sel; refresh();
+  } else if (t === 'short_horizon' || t === 'long_horizon') {
+    if (S.pending.length === 0) S.pending.push({ q: p });  // exactly where clicked
+    else if (S.pending.length === 1) S.pending.push(p);
+    else {
+      const [s, f] = S.pending; S.pending = [];
+      try {
+        const out = await api(`/api/route?name=${S.scene}`, { start: s.q, face: f, goal: p });
+        edit(() => { A.routes.push({ id: nextId(A.routes, 'route_', /_(\d+)$/), mode: t, ...out, static_pedestrians: [], dynamic_pedestrians: [] }); S.sel = A.routes.length - 1; });
+      } catch (e) { flash(e.message); }
+    }
+    hint(); draw();
+  } else if (t === 'cone') {
+    edit(() => A.cones.push({ id: nextId(A.cones, 'C', /^C(\d+)$/), xy: [r4(p[0]), r4(p[1])], yaw_deg: 0.0 }));
+  } else if (t === 'static' && r) {
+    if (!S.pending.length) { S.pending = [p]; hint(); draw(); }  // exactly where clicked (not on the centerline)
+    else {
+      const q = S.pending[0]; S.pending = [];
+      edit(() => r.static_pedestrians.push({ xy: [r4(q[0]), r4(q[1])], yaw_deg: deg(Math.atan2(p[1] - q[1], p[0] - q[0])), identity: S.identities[S.ident] }));
+    }
+  } else if (t === 'dynamic' && r) {
+    const q = project(r.centerline_xy, p).q;
+    edit(() => r.dynamic_pedestrians.push({ xy: [r4(q[0]), r4(q[1])], identity: S.identities[S.ident] }));
+  } else if (t === 'region' && r) {
+    if (r.region_xy) {
+      const v = nearVertex(r.region_xy, p);
+      if (v >= 0 && ev && ev.shiftKey) { if (r.region_xy.length > 3) edit(() => { r.region_xy.splice(v, 1); regionEdited(r); }); else flash('A region needs at least 3 corners'); }
+      else if (v < 0) {  // on an edge: insert a corner there
+        const pr = project(r.region_xy.concat([r.region_xy[0]]), p);
+        if (pr.d * S.view.scale < PICK_PX) edit(() => { r.region_xy.splice(pr.i + 1, 0, [r4(pr.q[0]), r4(pr.q[1])]); regionEdited(r); });
+      }
+    } else if (S.pending.length >= 3 && nearVertex([S.pending[0]], p) === 0) closeRegion();
+    else { S.pending.push([r4(p[0]), r4(p[1])]); hint(); draw(); }
+  } else if (t === 'ruler') {  // first click starts a measurement, second ends it; the next click starts a new one
+    S.ruler = S.ruler && S.ruler.a && !S.ruler.b ? { a: S.ruler.a, b: p } : { a: p, b: null };
+    hint(); draw();
+  } else if (t === 'erase') {
+    const cands = A.cones.map((c, i) => [c.xy, () => A.cones.splice(i, 1), S.coneRadius * S.view.scale]);  // a cone: anywhere in its circle
+    if (r) for (const k of ['static', 'dynamic']) r[`${k}_pedestrians`].forEach((q, j) => cands.push([q.xy, () => r[`${k}_pedestrians`].splice(j, 1)]));
+    let best = null;
+    for (const [xy, del, rad = 0] of cands) { const d = Math.hypot(xy[0] - p[0], xy[1] - p[1]) * S.view.scale; if (d < Math.max(PICK_PX, rad) && (!best || d < best.d)) best = { d, del }; }
+    if (best) edit(best.del);
+  }
+}
+function closeRegion() {
+  const r = S.ann.routes[S.sel];
+  const P = S.pending.filter((q, i, a) => i === 0 || Math.hypot(q[0] - a[i - 1][0], q[1] - a[i - 1][1]) > 0.01);  // no repeated corners
+  if (!r || P.length < 3) return;
+  S.pending = [];
+  edit(() => { r.region_xy = P; regionEdited(r); });
+}
+async function autoRegion() {
+  const r = S.ann.routes[S.sel]; if (!r) return;
+  const h = $('hint'); h.style.setProperty('--hc', css('--region')); h.innerHTML = '<b>Auto-filling…</b>';
+  try {
+    const out = await api(`/api/auto_region?name=${S.scene}`, { centerline_xy: r.centerline_xy });
+    if (!out.region_xy || out.region_xy.length < 3) throw new Error('no walkable area found along this route');
+    edit(() => { r.region_xy = out.region_xy; regionEdited(r); });
+    if (S.tool !== 'region') setTool('region');
+  } catch (e) { flash(e.message); }
+}
+function flash(msg) { const h = $('hint'); h.style.setProperty('--hc', '#fca5a5'); h.innerHTML = `<b>${msg}</b>`; setTimeout(hint, 2500); }
+
+// ------------------------------------------------------------------ events
+let drag = null;
+let vdrag = null;  // a region corner being dragged
+canvas.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  const r = S.ann && S.ann.routes[S.sel];
+  if (S.tool === 'region' && r && r.region_xy && !e.shiftKey) {
+    const v = nearVertex(r.region_xy, toWorld([e.offsetX, e.offsetY]));
+    if (v >= 0) { vdrag = { v, before: JSON.stringify({ ann: S.ann, sel: S.sel }), moved: false }; return; }
+  }
+  drag = { x: e.offsetX, y: e.offsetY, cx: S.view.cx, cy: S.view.cy, moved: false };
+});
+window.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect(), sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  if (vdrag) {
+    const w = toWorld([sx, sy]), r = S.ann.routes[S.sel];
+    r.region_xy[vdrag.v] = [r4(w[0]), r4(w[1])]; vdrag.moved = true;
+  }
+  if (drag) {
+    if (Math.hypot(sx - drag.x, sy - drag.y) > 4) { drag.moved = true; canvas.classList.add('grab'); }
+    if (drag.moved) { S.view.cx = drag.cx - (sx - drag.x) / S.view.scale; S.view.cy = drag.cy + (sy - drag.y) / S.view.scale; }
+  }
+  const inside = sx >= 0 && sy >= 0 && sx <= W() && sy <= H();
+  S.mouse = inside ? toWorld([sx, sy]) : null;
+  $('coords').textContent = S.mouse ? `x ${S.mouse[0].toFixed(2)}  y ${S.mouse[1].toFixed(2)}` : '—';
+  draw();
+});
+window.addEventListener('mouseup', (e) => {
+  if (vdrag) {
+    if (vdrag.moved) { regionEdited(S.ann.routes[S.sel]); S.history.push(vdrag.before); if (S.history.length > 100) S.history.shift(); refresh(); save(); }
+    vdrag = null; return;
+  }
+  if (drag && !drag.moved && e.target === canvas) click(toWorld([e.offsetX, e.offsetY]), e);
+  drag = null; canvas.classList.remove('grab');
+});
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); S.pending = []; hint(); draw(); });
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'SELECT') return;
+  if (e.key === 'Escape') { S.pending = []; S.ruler = null; hint(); draw(); }
+  if (S.tool === 'region' && e.key === 'Enter') closeRegion();
+  if (S.tool === 'region' && e.key === 'Backspace' && S.pending.length) { e.preventDefault(); S.pending.pop(); hint(); draw(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+});
+window.addEventListener('resize', resize);
+document.querySelectorAll('[data-tool]').forEach((b) => b.onclick = () => setTool(b.dataset.tool));
+$('undo').onclick = undo; $('fit').onclick = fit;
+$('regionAuto').onclick = autoRegion;
+$('regionCopy').onclick = () => {
+  const r = S.ann.routes[S.sel]; if (!r || !r.region_xy) return;
+  S.regionClip = { scene: S.scene, from: r.id, xy: JSON.parse(JSON.stringify(r.region_xy)) };
+  const h = $('hint'); h.style.setProperty('--hc', css('--region')); h.innerHTML = `<b>Copied ${r.id}'s region</b> — select another route and Paste`;
+  setTimeout(hint, 2500); panels();
+};
+$('regionPaste').onclick = () => {
+  const r = S.ann.routes[S.sel], c = S.regionClip;
+  if (!r || !c || c.scene !== S.scene) return;
+  edit(() => { r.region_xy = JSON.parse(JSON.stringify(c.xy)); regionEdited(r); });
+};
+$('regionClear').onclick = () => { const r = S.ann.routes[S.sel]; if (r && r.region_xy) edit(() => { delete r.region_xy; regionEdited(r); }); };
+$('walkToggle').onclick = () => setWalk(!S.showWalk);
+try { S.showWalk = localStorage.getItem('annot.showWalk') === '1'; } catch (e) { S.showWalk = false; }
+$('walkToggle').classList.toggle('active', S.showWalk);
+$('zin').onclick = () => zoomAt(W() / 2, H() / 2, 1.4); $('zout').onclick = () => zoomAt(W() / 2, H() / 2, 1 / 1.4);
+$('scene').onchange = (e) => loadScene(e.target.value);
+const step = (d) => loadScene(S.scenes[(S.scenes.indexOf(S.scene) + d + S.scenes.length) % S.scenes.length]);
+$('prevScene').onclick = () => step(-1); $('nextScene').onclick = () => step(1);
+
+(async () => {
+  const d = await api('/api/scenes');
+  S.scenes = d.scenes; S.identities = d.identities; S.coneRadius = d.cone_radius_m;
+  $('scene').innerHTML = S.scenes.map((s) => `<option value="${s}">${s.replaceAll('_', ' ')}</option>`).join('');
+  identities(); resize();
+  await loadScene(S.scenes[0]);
+})();
+</script>
+</body>
+</html>

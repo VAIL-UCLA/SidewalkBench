@@ -1,0 +1,12 @@
+# The models the GS eval runs by default (run_all.sh / run_all_models.sh without --models).
+# One per line; must be runnable (python sidewalkbench/gs/model_spec.py --runnable).
+# The PG release zoo (sidewalkbench/models), in the paper tables' order; InternVLA_N1 is left out for now
+# (its checkpoints are not downloaded; with them it needs more GPU memory than the larger scenes leave).
+ViNT
+NoMaD
+MBRA
+CityWalker
+Cosmos3
+MIMIC
+S2E
+FlowPilot

@@ -1,0 +1,5 @@
+model_type: S2E
+terrain_type: intersection
+terrain_segment: corner
+num_peds_per_terrain: 0
+scenario_type: empty

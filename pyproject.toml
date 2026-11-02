@@ -1,0 +1,247 @@
+[build-system]
+requires = ["setuptools>=70.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sidewalkbench"
+version = "0.1.0"
+description = "SidewalkBench-PG: pedestrian-reactive sidewalk navigation environments built on Isaac Lab."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # ----- IsaacLab workspace members (editable path deps in [tool.uv.sources]) -----
+    "isaaclab",
+    "isaaclab-assets",
+    "isaaclab-newton",
+    "isaaclab-ov",
+    "isaaclab-physx",
+    "isaaclab-rl",
+    "isaaclab-tasks",
+    "isaaclab-visualizers",
+    # ----- generic deps centralized by IsaacLab (copied from IsaacLab/pyproject.toml @ v3.0.0-EA) -----
+    "numpy>=2",
+    "torch>=2.11",
+    "torchvision>=0.26.0",
+    "torchaudio>=2.11",
+    "onnx>=1.18.0",
+    "prettytable>=3.3.0",
+    "psutil",
+    "protobuf>=4.25.8,!=5.26.0",
+    "hidapi>=0.14.0",
+    "gymnasium>=1.2.0",
+    "trimesh>=4.6.8",
+    "pyglet>=2.1.6,<3",
+    # Pinned for InternVLA-N1 (InternNav) and MotionLCM, which both target transformers 4.x.
+    "transformers==4.51.0",
+    "einops",
+    "warp-lang==1.16.0",
+    "matplotlib>=3.10.3",
+    "pillow>=12.3.0",
+    "botocore",
+    "starlette>=1.3.1",
+    "omniverseclient==2.72.3",
+    "filelock",
+    "lazy_loader>=0.4",
+    "Jinja2",
+    "pin ; platform_system == 'Linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
+    "pin-pink==3.3.0 ; platform_system == 'Linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
+    "daqp==0.8.5 ; platform_system == 'Linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
+    "usd-exchange==2.3.0",
+    "hf-xet>=1.4.1,<2.0.0 ; platform_machine == 'x86_64' or platform_machine == 'AMD64' or platform_machine == 'aarch64'",
+    "tensorboard",
+    "numba>=0.63.1",
+    "hydra-core",
+    "h5py>=3.15.0",
+    "packaging",
+    "rich",
+    "tqdm>=4.67.1",
+    "rsl-rl-lib==5.4.1",
+    "gitpython>=3.1.59",
+    "onnxscript>=0.5",
+    "newton[sim]>=1.2.0",
+    "requests>=2.25.0",
+    "scipy>=1.11.0",
+    "coacd>=1.0.7",
+    "fast-simplification>=0.1.11",
+    "alphashape>=1.3.1",
+    "meshio>=5.3.5",
+    "pycollada>=0.9",
+    "resolve-robotics-uri-py>=0.4.0",
+    "open3d>=0.19.0 ; python_version < '3.13' and (sys_platform != 'linux' or platform_machine != 'aarch64')",
+    "newton-usd-schemas>=0.2.0",
+    "PyOpenGL-accelerate>=3.1.0",
+    "imgui-bundle>=1.92.5",
+    "typing-extensions>=4.15.0",
+    # ----- sidewalkbench runtime (primary entrypoint path) -----
+    "opencv-python",
+    "shapely",
+    "joblib",
+    "smplx",
+    "foxglove-sdk",
+    "openai",
+    # CUDA-12 build to reuse torch's cu128 nvidia libs (cudart.so.12, cufft.so.11,
+    # cudnn.so.9). 1.28.0+ switched to CUDA 13 and would need a duplicate CUDA stack.
+    # 1.26.0 has no aarch64 wheel, so fall back to the latest there.
+    "onnxruntime-gpu[cuda,cudnn]==1.26.0 ; platform_machine != 'aarch64'",
+    "onnxruntime-gpu ; platform_machine == 'aarch64'",
+    # The three compiled dependencies (CUDA / C++), built from source at pinned commits by `uv sync` (see the README).
+    # nvdiffrast: pedestrian and robot rendering.
+    "nvdiffrast @ git+https://github.com/NVlabs/nvdiffrast.git@253ac4fcea7de5f396371124af597e6cc957bfae",
+    # The real-world scanned scenes (sidewalkbench/gs): gsplat 1.6's inference renderer
+    # (gsplat.experimental.render; on upstream main, in no release yet) and the .ply scenes.
+    "gsplat @ git+https://github.com/nerfstudio-project/gsplat.git@512d366b67073d77ca099ede742683c165dfc23b",
+    "plyfile",
+    # RVO2 (pedestrian motion in the scanned scenes, sidewalkbench/gs/humans.py); no PyPI release of this commit.
+    "pyrvo2 @ git+https://github.com/sybrenstuvel/Python-RVO2.git@c2c46ba8d59556aa10faf03479293236efea154d",
+    # Isaac Sim is required by every entrypoint, so it is a core dependency (not an extra).
+    "isaacsim[all,extscache]==6.1.0.0",
+    "manifold3d>=3.5.3",
+    # InternVLA-N1 requires diffusers 0.33.x; MotionLCM uses get_scheduler + LCMScheduler,
+    # both present in 0.33.1.
+    "diffusers==0.33.1",
+    "torchmetrics>=1.9.0",
+    # Required by MotionLCM's text encoder; >=6 forces transformers>=5, so stay <6.
+    "sentence-transformers>=4.1,<6",
+    # InternNav's LongCLIP tokenizer (imported via internnav.model.encoder) needs ftfy.
+    "ftfy==6.3.1",
+    # InternNav's encoder package (imported transitively when building the model)
+    # imports the legacy `gym` spaces API.
+    "gym==0.26.2",
+    "gdown>=6.4.0",
+    "accelerate>=1.15.0",
+]
+
+[project.optional-dependencies]
+# NOTE: `internnav` (InternVLA model) is intentionally NOT declared here: InternNav 0.3.1
+# pins `starlette>=0.36,<0.38` while Isaac Lab requires `starlette>=1.3.1`, so they cannot
+# co-resolve. Install InternNav ad hoc only when running the InternVLA model, e.g.:
+#   uv pip install -e ../InternNav --no-sync
+models = []
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sidewalkbench*"]
+namespaces = true
+
+# ---------------------------------------------------------------------------
+# uv configuration.
+# The framework dependency, resolver-override, and index blocks below are
+# copied from IsaacLab/pyproject.toml @ v3.0.0-EA so the two resolve together.
+# Re-copy when bumping the IsaacLab tag.
+# ---------------------------------------------------------------------------
+
+[[tool.uv.index]]
+url = "https://pypi.nvidia.com"
+explicit = false
+
+[[tool.uv.index]]
+name = "pypi-public"
+url = "https://pypi.org/simple"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
+prerelease = "allow"
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+]
+override-dependencies = [
+    "numpy>=2",
+    "mujoco~=3.11.0",
+    "mujoco-warp~=3.11.0",
+    "newton[sim]==1.5.2",
+    "newton-usd-schemas>=0.4.1",
+    "torch==2.11.0",
+    "torchvision==0.26.0",
+    "torchaudio==2.11.0",
+    "packaging>=20,<27",
+]
+python-preference = "only-managed"
+# nvdiffrast and gsplat compile CUDA code at install: one package at a time (see extra-build-variables).
+concurrent-builds = 1
+# `isaacsim-robot` pulls in the CPU `onnxruntime`, which shadows the GPU build and
+# silently disables CUDA inference. Drop it globally so only `onnxruntime-gpu` remains.
+# `isaacsim-core` also pulls in a no-FFmpeg OpenCV package. Both OpenCV wheels
+# install the same cv2 module, so retain only opencv-python for MP4 recording.
+exclude-dependencies = ["onnxruntime", "opencv-python-headless-noffmpeg"]
+
+# nvdiffrast and gsplat compile CUDA extensions at install (`uv sync`; needs a CUDA toolkit
+# of the same major version as the project's torch -- 12.x, 13.x on Linux aarch64 -- found via CUDA_HOME, nvcc on
+# PATH or /usr/local/cuda) for the machine's GPU(s) (TORCH_CUDA_ARCH_LIST overrides). They build against exactly the
+# project's torch (match-runtime; that needs their metadata up front: dependency-metadata, from their setup files at
+# the pinned commits), with 4 parallel compile jobs (an unbounded CUDA compile runs out of memory).
+[tool.uv.extra-build-dependencies]
+nvdiffrast = [{ requirement = "torch", match-runtime = true }]
+gsplat = [{ requirement = "torch", match-runtime = true }]
+# Python-RVO2 builds its C++ library with cmake (<4: its CMakeLists predates 3.5) and its bindings with Cython,
+# and declares neither.
+pyrvo2 = ["cython==3.0.12", "cmake<4"]
+
+# gsplat: only what SidewalkBench uses -- its inference renderer (gsplat.experimental.render) and the core module
+# gsplat imports; the training kernels (3DGS / 3DGUT / 2DGS rasterization with their gradients, Adam, relocation,
+# losses) are compiled out (gsplat's own build switches), which are most of gsplat's compile time.
+[tool.uv.extra-build-variables]
+nvdiffrast = { MAX_JOBS = "4" }
+gsplat = { MAX_JOBS = "4", BUILD_3DGS = "0", BUILD_3DGUT = "0", BUILD_2DGS = "0", BUILD_ADAM = "0", BUILD_RELOC = "0", BUILD_LOSSES = "0" }
+
+[[tool.uv.dependency-metadata]]
+name = "nvdiffrast"
+version = "0.4.0"
+requires-dist = ["numpy"]
+
+[[tool.uv.dependency-metadata]]
+name = "gsplat"
+version = "1.6.0"
+requires-dist = ["ninja", "numpy", "jaxtyping", "nvtx", "rich>=12", "torch>=2.7"]
+
+[[tool.uv.dependency-metadata]]
+name = "pyrvo2"
+version = "0.0.0"
+requires-dist = []
+
+[tool.uv.sources]
+omniverseclient = { index = "pypi-public" }
+ovphysx = { index = "pypi-public" }
+ovrtx = { index = "pypi-public" }
+ovstage = { index = "pypi-public" }
+isaaclab = { path = "third_party/IsaacLab/source/isaaclab", editable = true }
+"isaaclab-assets" = { path = "third_party/IsaacLab/source/isaaclab_assets", editable = true }
+"isaaclab-newton" = { path = "third_party/IsaacLab/source/isaaclab_newton", editable = true }
+"isaaclab-ov" = { path = "third_party/IsaacLab/source/isaaclab_ov", editable = true }
+"isaaclab-physx" = { path = "third_party/IsaacLab/source/isaaclab_physx", editable = true }
+"isaaclab-rl" = { path = "third_party/IsaacLab/source/isaaclab_rl", editable = true }
+"isaaclab-tasks" = { path = "third_party/IsaacLab/source/isaaclab_tasks", editable = true }
+"isaaclab-visualizers" = { path = "third_party/IsaacLab/source/isaaclab_visualizers", editable = true }
+torch = [
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+]
+torchaudio = [
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+]
+torchvision = [
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+]
+
+[tool.uv.pip]
+index-strategy = "unsafe-best-match"
+prerelease = "allow"

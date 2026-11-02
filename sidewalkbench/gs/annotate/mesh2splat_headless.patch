@@ -1,0 +1,43 @@
+diff --git a/src/main.cpp b/src/main.cpp
+index 220cb0b..8b5d0d7 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -7,6 +7,11 @@
+ #include "renderer/renderer.hpp"
+ #include "glewGlfwHandlers/glewGlfwHandler.hpp"
+ #include "renderer/guiRendererConcreteMediator.hpp"
++#include <chrono>
++#include <cstdio>
++#include <cstdlib>
++#include <string>
++#include <thread>
+ 
+ int main(int argc, char** argv) {
+     GlewGlfwHandler glewGlfwHandler(glm::ivec2(1080, 720), "Mesh2Splat");
+@@ -30,6 +35,26 @@ int main(int argc, char** argv) {
+     renderer.initialize();
+     GuiRendererConcreteMediator guiRendererMediator(renderer, ImGuiUI);
+ 
++    if (argc >= 4) {  // headless: Mesh2Splat <in.glb> <out.ply> <resolution> [std_dev], same calls as the GUI
++        glfwHideWindow(glewGlfwHandler.getWindow());
++        std::string in = argv[1];
++        int res = std::atoi(argv[3]);
++        renderer.resetModelMatrices();
++        renderer.getSceneManager().loadModel(in, in.substr(0, in.find_last_of('/') + 1));
++        renderer.gaussianBufferFromSize(res * res);
++        renderer.setFormatType(0);
++        renderer.setViewportResolutionForConversion(res);
++        renderer.setStdDevFromImGui(argc > 4 ? static_cast<float>(std::atof(argv[4])) : 0.65f);
++        renderer.enableRenderPass(conversionPassName);
++        renderer.renderFrame();
++        glFinish();
++        renderer.getSceneManager().exportPly(argv[2], 0);  // standard 3DGS ply, written on a detached thread
++        std::this_thread::sleep_for(std::chrono::seconds(3));
++        std::printf("Mesh2Splat: %u gaussians at resolution %d -> %s\n", renderer.getTotalGaussianCount(), res, argv[2]);
++        glfwTerminate();
++        return 0;
++    }
++
+     float deltaTime = 0.0f; 
+     float lastFrame = 0.0f;
+ 

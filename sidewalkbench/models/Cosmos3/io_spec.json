@@ -1,0 +1,96 @@
+{
+ "batch": "dynamic (N >= 1, one t for the whole batch)",
+ "encoder": {
+  "file": "encoder.onnx",
+  "canvas_wh": [
+   832,
+   480
+  ],
+  "inputs": {
+   "frames": [
+    "uint8",
+    [
+     "N",
+     3,
+     1,
+     480,
+     832
+    ],
+    "RGB canvas, channel first (fill 832x480; see policy.py)"
+   ]
+  },
+  "outputs": {
+   "latent": [
+    "float32",
+    [
+     "N",
+     48,
+     1,
+     30,
+     52
+    ],
+    "normalized Wan2.2 latent of the current frame"
+   ]
+  }
+ },
+ "denoiser": {
+  "file": "denoiser.onnx",
+  "weights_dtype": "fp16",
+  "inputs": {
+   "x_vision": [
+    "float32",
+    [
+     "N",
+     48,
+     1,
+     30,
+     52
+    ],
+    "latent video state; frame 0 = conditioning latent"
+   ],
+   "x_action": [
+    "float32",
+    [
+     "N",
+     60,
+     64
+    ],
+    "action state; first 9 channels are the av action"
+   ],
+   "t": [
+    "float32",
+    [
+     1
+    ],
+    "model-space timestep = meta.model_t[step], shared by the batch"
+   ]
+  },
+  "outputs": {
+   "v_vision": [
+    "float32",
+    [
+     "N",
+     48,
+     1,
+     30,
+     52
+    ],
+    "flow velocity (zero on the conditioning frame)"
+   ],
+   "v_action": [
+    "float32",
+    [
+     "N",
+     60,
+     64
+    ],
+    "flow velocity (zero beyond the raw channels)"
+   ]
+  }
+ },
+ "video_frames": 1,
+ "num_steps": 20,
+ "sampler": "UniPC order 2 (bh2, x0-prediction), default 20 steps: coefficients in meta.json 'unipc'/'model_t'; other counts in 'schedules'",
+ "actions": "per-step camera pose T_i^-1 T_(i+1): [t_xyz (x right, y down, z fwd; model metres) | first two rotation columns], 10 Hz, unnormalized",
+ "robot_scale": 1.9910068011997062
+}

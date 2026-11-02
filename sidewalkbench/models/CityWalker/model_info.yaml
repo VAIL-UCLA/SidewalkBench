@@ -1,0 +1,55 @@
+name: CityWalker-PG-Official
+goal_type: point_goal
+image_resolution:
+- 350
+- 630
+context_size: 5
+input_fps: 1.0
+reset_history_speed_mps: 1.0
+obs_normalize: true
+inputs:
+  obs_images:
+    shape:
+    - batch
+    - 5
+    - 3
+    - 350
+    - 630
+    dtype: float32
+    description: 5 RGB frames, ImageNet normalized once by the adapter
+  trajectory:
+    shape:
+    - batch
+    - 6
+    - 2
+    dtype: float32
+    description: Five measured past/current robot positions, oldest first, followed
+      by the goal; adapter converts forward/left metres to the checkpoint frame.
+outputs:
+  wp_pred:
+    shape:
+    - batch
+    - 5
+    - 2
+    description: 5 predicted waypoints (x,y)
+  arrive_pred:
+    shape:
+    - batch
+    - 1
+    description: Arrival probability
+num_waypoints: 5
+default_controller: pd
+checkpoint_repository: UCLA-VAIL/Navigation-Model-Zoo-Public
+checkpoint_revision: 297b6596125bd870fc4e761f2bda5e243a5a4d29
+checkpoint_files:
+  citywalker.onnx:
+    public_path: CityWalker_PG_Official/citywalker.onnx
+    sha256: e97279414bcb71d258ccf7b7610bee5c1c32bf02d722de55a5b63d430eb370b5
+    size: 806081972
+output_fps: 1.0
+output_timing_source: https://github.com/ai4ce/CityWalker/blob/main/config/citywalk_2000hr.yaml
+output_timing_note: Five future labels at training target_fps=1 Hz; independent of
+  benchmark input_fps.
+input_timing_note: Policy, RGB context, and pose history sampled at 1 Hz.
+reset_history_note: Missing reset poses use a 1 m/s forward-motion prior;
+  measured poses replace the prior over the first four seconds.

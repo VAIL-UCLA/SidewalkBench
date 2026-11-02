@@ -1,0 +1,77 @@
+name: FlowPilot-GL-Official
+goal_type: goal-free
+onnx: flowpilot_base_goal_less.onnx
+image_resolution:
+- 288
+- 512
+context_size: 21
+input_fps: 5.0
+obs_normalize: false
+camera:
+  model: pinhole
+  fx: 210.667
+  fy: 210.667
+  cx: 256.0
+  cy: 144.0
+  height: 0.456
+inputs:
+  observation:
+    shape:
+    - batch
+    - 21
+    - 3
+    - 288
+    - 512
+    dtype: float32
+    description: 21 RGB frames [t-20, ..., t] in [0,1]
+  embodiment_id:
+    shape:
+    - batch
+    - 1
+    dtype: int64
+    default: 0
+    description: Robot embodiment identifier
+  metric_spacing:
+    shape:
+    - batch
+    - 4
+    dtype: float32
+    default:
+    - 0.0
+    - 0.51
+    - -0.16
+    - 0.16
+    description: Trajectory normalization bounds [x_min, x_max, y_min, y_max]
+outputs:
+  output:
+    shape:
+    - batch
+    - 64
+    - 20
+    - 2
+    description: "64 modes x 20 waypoints x 2 (x,y). Index 0 is a register token \u2014\
+      \ discard it."
+  scores:
+    shape:
+    - batch
+    - 64
+    description: "Mode selection scores. Index 0 is a register token \u2014 discard\
+      \ it."
+note: 'Raw ONNX output is [batch, 65, 20, 2] and [batch, 65]. Index 0 in the mode
+  dimension is a register token and must be sliced off: output[:,1:,:,:] and scores[:,1:].'
+num_modes: 64
+num_waypoints: 20
+output_fps: 5.0
+mode_selection: argmax
+controller:
+  type: pd
+  description: Shared benchmark PD, same waypoint nearest 1 s for linear and angular
+    velocity.
+checkpoint_repository: UCLA-VAIL/Navigation-Model-Zoo-Public
+checkpoint_revision: 297b6596125bd870fc4e761f2bda5e243a5a4d29
+default_controller: pd
+checkpoint_files:
+  flowpilot_base_goal_less.onnx:
+    public_path: FlowPilot_Official/flowpilot_base_goal_less.onnx
+    sha256: 5091f835f947d063c72c064bb2e30ef7723e61f9865c52ae81002898d3dd76fe
+    size: 958929515

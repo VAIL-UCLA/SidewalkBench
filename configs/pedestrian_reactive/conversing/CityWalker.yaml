@@ -1,0 +1,5 @@
+model_type: CityWalker
+terrain_type: intersection
+terrain_segment: straight
+num_peds_per_terrain: 2
+scenario_type: conversing
