@@ -13,7 +13,7 @@
 
 ## Installation
 
-See [Install.md](/INSTALL.md)
+See [INSTALL.md](/INSTALL.md).
 
 
 
