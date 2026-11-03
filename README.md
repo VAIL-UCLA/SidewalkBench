@@ -9,96 +9,18 @@
 <sup>1</sup> University of California, Los Angeles &nbsp;&nbsp;&nbsp;&nbsp; <sup>2</sup> Coco Robotics &nbsp;&nbsp;&nbsp;&nbsp; <sup>\*</sup> Equal Contribution
 
 
- ![Teaser](/teaser.jpg)
+ ![Teaser](/images/teaser.jpg)
 
 ## Installation
 
-1. Clone the repository with its submodules (IsaacLab 3.0.0-EA, MotionLCM, and InternNav):
-   ```shell
-   git clone --recurse-submodules --shallow-submodules https://github.com/VAIL-UCLA/SidewalkBench.git
-   ```
-   Run the remaining steps from `SidewalkBench/`.
-
-2. Install dependencies (creates/syncs the `uv` environment):
-   ```shell
-   uv sync
-   ```
-   This compiles nvdiffrast, gsplat and RVO2 from source, and needs a CUDA toolkit of the same major version as
-   PyTorch (CUDA 12; 12.8 recommended), found via `CUDA_HOME`, `nvcc` on `PATH`, or `/usr/local/cuda`.
-
-3. Download the MotionLCM assets into `third_party/MotionLCM/`. Only the text-to-motion
-   generation assets are required (`git-lfs`, `gdown`, and `unzip` must be installed):
-
-   ```shell
-   cd third_party/MotionLCM
-   uv run bash prepare/prepare_t5.sh                  # deps/sentence-t5-large
-   uv run bash prepare/download_pretrained_models.sh  # experiments_t2m/motionlcm_humanml/motionlcm_humanml.ckpt
-   uv run bash prepare/prepare_tiny_humanml3d.sh      # datasets/humanml3d (Mean.npy, Std.npy)
-   cd -
-   ```
-
-
-4. Download the asset bundle into `assets/` from the project root:
-
-   ```shell
-   uv run hf download UCLA-VAIL/SidewalkBench-Assets --repo-type dataset --local-dir assets
-   ```
-
-   For the real-world scanned scenes, download the assets into
-   `gs_assets/`:
-
-   ```shell
-   uv run hf download UCLA-VAIL/SidewalkBench-GS-Assets --repo-type dataset --local-dir gs_assets
-   ```
-
-5. Convert the bundled texture paths to absolute paths for this machine. The RTX
-   MDL material conversion does not resolve texture paths relative to the USD layer,
-   so this step is required after downloading the bundle:
-
-   ```shell
-   uv run python -m sidewalkbench.tools.absolutize_asset_paths
-   ```
-
-6. Download the model checkpoints before evaluation using the
-   [public checkpoint download instructions](#download-public-checkpoints) below.
-
-The SMPL body model (`SMPL_NEUTRAL.pkl`, `smpl_uv.obj`) is license-restricted and
-is not part of the bundle. Download it from the [official SMPL website](https://smpl.is.tue.mpg.de/) and
-place it under `assets/smplx/`.
-
-The SMPLitex texture (`smplx/SMPLitex-textures/*.png`) is likewise not
-included because it comes from another public dataset. Download it from [the
-official SMPLitex project page](https://dancasas.github.io/projects/SMPLitex/) and place it under `assets/smplx/SMPLitex-textures/`.
-
-## Models
-The benchmark models are CityWalker-PG-Official, ViNT, NoMaD, MBRA,
-MIMIC, S2E, InternVLA-N1, FlowPilot-GL-Official, and Cosmos3-Official. The OpenPilot checkpoint is currently not publically available.
-
-### Download public checkpoints
-
-From the repository root, download the checkpoints for all nine current
-benchmark models:
-
-```shell
-uv run python -m sidewalkbench.models.download_zoo
-```
-
-This downloads ViNT, NoMaD, MBRA, CityWalker, InternVLA-DualVLN (`InternVLA_N1`),
-Cosmos3, MIMIC, S2E, and FlowPilot. 
-
-To download a subset, pass the model names explicitly:
-
-```shell
-uv run python -m sidewalkbench.models.download_zoo --models ViNT NoMaD FlowPilot
-```
-
-The ONNX models come from the [public navigation model zoo](https://huggingface.co/UCLA-VAIL/Navigation-Model-Zoo-Public).
-InternVLA uses the [DualVLN checkpoint](https://huggingface.co/InternRobotics/InternVLA-N1-DualVLN).
+See [Install.md](/INSTALL.md)
 
 
 
 ## Quick Start
 ### Procedurally Generated Scenes
+
+ ![Teaser](/images/sidewalkbench_pg.gif)
 
 To reproduce the results, use the entry points `sidewalkbench/pg/envs/eval_short.py` (unit-test and
 pedestrian-reactive scenarios) and `sidewalkbench/pg/envs/eval_long.py` (long-horizon scenarios).
@@ -126,6 +48,8 @@ uv run sidewalkbench/pg/envs/eval_long.py   --num_envs 10      --config configs/
 
 ### Real-World Scanned Scenes
 
+![Real-world scanned scene navigation](/images/sidewalkbench_gs.gif)
+
 To run the unit-test real-world scenarios:
 ```shell
 sidewalkbench/gs/run_all.sh --num_envs 4 --mode short_horizon --exp_name gs_sh
@@ -146,10 +70,7 @@ Both evaluation scripts support visualization with **`--num_envs 1`**.
 | `--save_images` | JPEGs of the camera observation, full panel layout, and demo view. |
 | `--save_video` | MP4 recordings of the third-person view with a trajectory inset. |
 | `--save_mcap` | Foxglove MCAP recordings containing image panels, predicted waypoints, velocity commands, and robot poses. |
- 
-The dependency configuration keeps the FFmpeg-enabled OpenCV package and excludes
-Isaac Sim's conflicting no-FFmpeg build. When updating an existing environment,
-run `uv sync --reinstall-package opencv-python` once to restore OpenCV's shared files.
+
 
 Use a new `--exp_name` when recording a fresh run: evaluation skips a run if its
 experiment directory already contains `results.pkl`.
@@ -157,6 +78,8 @@ experiment directory already contains `results.pkl`.
 The scanned scenes only support `--save_images` and `--save_video`, and don't require only one environment.
 
 ## Embodiments
+
+![Go2 and G1 robot embodiments](/images/sidewalkbench_embodiments.gif)
 
 `--robot_type` selects the robot (default `coco`, the Ackermann-steered delivery robot). Every robot takes the
 same `(v, w)` command from the model's controller:
