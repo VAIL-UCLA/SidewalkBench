@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 from glob import glob
 
@@ -121,6 +122,8 @@ class SidewalkScenePG(InteractiveScene):
         # Pedestrians within this distance of the robot stay fully active
         # (ORCA + animation + rendering) regardless of camera orientation.
         self.behavior_proximity_radius = float(self.pg_config.get("behavior_proximity_radius", 5.0))
+        # Calibrated fisheye front camera, if any (env_setup): the composited pedestrians are projected through it.
+        self.fisheye_lens = self.pg_config.get("fisheye_lens")
         # Pedestrian behavior/ORCA update rate [Hz], decoupled from the policy
         # step rate (20 Hz for the streaming policies).
         self.behavior_update_hz = float(self.pg_config.get("behavior_update_hz", 5.0))
@@ -516,8 +519,8 @@ class SidewalkScenePG(InteractiveScene):
             self._behavior_manager.set_static_obstacles(tidx, obstacles)
 
     @staticmethod
-    def _camera_mvp(camera_pos, camera_quat, camera_intrinsics, device, dtype):
-        """Build per-camera ``P @ V`` matrices from a camera pose and intrinsics.
+    def _camera_mvp(camera_pos, camera_quat, camera_intrinsics, device, dtype, view_only=False):
+        """Build per-camera ``P @ V`` matrices from a camera pose and intrinsics (``V`` only if ``view_only``).
 
         Performed entirely on the compute device (no GPU->CPU sync) so it does not
         stall the physics loop when called from the behavior tick.
@@ -542,17 +545,54 @@ class SidewalkScenePG(InteractiveScene):
         )
         forward = rot @ torch.tensor([1.0, 0.0, 0.0], device=device, dtype=dtype)
         up = rot @ torch.tensor([0.0, 0.0, 1.0], device=device, dtype=dtype)
-        projection = perspective(intrinsics, device=device, dtype=dtype)
         view = look_at(pos, pos + forward, up, device=device, dtype=dtype)
+        if view_only:
+            return view.contiguous()
+        projection = perspective(intrinsics, device=device, dtype=dtype)
         return (projection @ view).contiguous()
 
-    def _project_persons(self, points, mvp, margin):
+    def _fisheye_project(self, view_xyz):
+        """Project OpenGL view-space points (x right, y up, -z forward) through :attr:`fisheye_lens` (Kannala-Brandt).
+
+        Returns ``(ndc_x, ndc_y, theta, dist)``: NDC with y up (same convention as :func:`perspective`), the
+        off-axis angle [rad] and the Euclidean distance to the camera.
+        """
+        lens = self.fisheye_lens
+        x, y, z = view_xyz[..., 0], view_xyz[..., 1], view_xyz[..., 2]
+        rho = torch.sqrt(x * x + y * y).clamp_min(1e-9)
+        theta = torch.atan2(rho, -z)
+        t2 = theta * theta
+        theta_d = theta * (1 + lens["k1"] * t2 + lens["k2"] * t2**2 + lens["k3"] * t2**3 + lens["k4"] * t2**4)
+        u = lens["cx"] + lens["fx"] * theta_d * x / rho
+        v = lens["cy"] - lens["fy"] * theta_d * y / rho
+        ndc_x = 2.0 * u / lens["width"] - 1.0
+        ndc_y = 1.0 - 2.0 * v / lens["height"]
+        dist = torch.sqrt(x * x + y * y + z * z)
+        return ndc_x, ndc_y, theta, dist
+
+    def _fisheye_clip(self, verts_view, faces, near=0.1):
+        """Un-indexed clip-space triangles (w = 1) for nvdiffrast from view-space vertices ``[B,V,4]`` and ``faces``.
+
+        Returns ``(clip [B,3F,4], faces [F,3])``, triangles in the order of ``faces``. The lens is not projective, so
+        a triangle with a vertex it cannot see (over 100 deg off-axis, or inside the camera) is dropped whole: the
+        rasterizer's clipping would smear it across the frame.
+        """
+        ndc_x, ndc_y, theta, dist = self._fisheye_project(verts_view[:, faces.long(), :3])  # [B,F,3] each
+        z = 1.0 - 2.0 * near / dist.clamp_min(near)
+        clip = torch.stack([ndc_x, ndc_y, z, torch.ones_like(z)], dim=-1)
+        ok = (theta < math.radians(100.0)) & (dist > 0.05)
+        clip[~ok.all(dim=-1)] = clip.new_tensor((0.0, 0.0, 0.0, -1.0))
+        tri_faces = torch.arange(clip.shape[1] * 3, dtype=torch.int32, device=clip.device).reshape(-1, 3)
+        return clip.flatten(1, 2).contiguous(), tri_faces
+
+    def _project_persons(self, points, mvp, margin, fisheye=False):
         """Return per-camera visibility for world points.
 
         Args:
             points: World positions [m], shape ``(N, 3)``.
-            mvp: Projection-view matrices, shape ``(B, 4, 4)``.
+            mvp: Projection-view matrices, shape ``(B, 4, 4)`` (view matrices if ``fisheye``).
             margin: Extra NDC margin (fraction of half-image) treated as visible.
+            fisheye: Test against the :attr:`fisheye_lens` image instead of a pinhole frustum.
 
         Returns:
             Bool tensor ``(B, N)``: in front of each camera and inside the frustum
@@ -560,6 +600,10 @@ class SidewalkScenePG(InteractiveScene):
         """
         points_h = torch.cat([points, torch.ones_like(points[:, :1])], dim=-1)  # (N,4)
         clip = torch.einsum("nj,bij->bni", points_h, mvp.to(points.dtype))  # (B,N,4)
+        if fisheye:  # ``mvp`` is the view matrix; test against the fisheye image
+            ndc_x, ndc_y, theta, _ = self._fisheye_project(clip[..., :3])
+            in_front = theta < math.radians(0.5 * self.fisheye_lens["max_fov_deg"])
+            return in_front & (ndc_x.abs() <= 1.0 + margin) & (ndc_y.abs() <= 1.0 + margin)
         w = clip[..., 3]
         in_front = w > 1e-6
         ndc = clip[..., :2] / w.clamp(min=1e-6).unsqueeze(-1)
@@ -582,7 +626,8 @@ class SidewalkScenePG(InteractiveScene):
             camera_intrinsics = camera.data.intrinsic_matrices
             if camera_pos is None or camera_intrinsics is None:
                 return {}
-            mvp = self._camera_mvp(camera_pos, camera_quat, camera_intrinsics, self.render_device, self.dtype)
+            mvp = self._camera_mvp(camera_pos, camera_quat, camera_intrinsics, self.render_device, self.dtype,
+                                   view_only=self.fisheye_lens is not None)
             robot_root_w = self["robot"].data.root_pos_w
         except Exception:
             return {}
@@ -602,7 +647,8 @@ class SidewalkScenePG(InteractiveScene):
             if env_ids.numel() == 0:
                 continue
             points = states[:, :3].to(device=self.render_device, dtype=self.dtype)
-            visible = self._project_persons(points, mvp[env_ids], self.behavior_fov_margin).any(dim=0)  # (N,)
+            visible = self._project_persons(points, mvp[env_ids], self.behavior_fov_margin,
+                                            fisheye=self.fisheye_lens is not None).any(dim=0)  # (N,)
 
             robot_xy = robot_xy_all[env_ids, :2]  # (E,2)
             distance = torch.linalg.norm(points[:, None, :2] - robot_xy[None, :, :], dim=-1).amin(dim=1)  # (N,)
@@ -1153,6 +1199,8 @@ class SidewalkScenePG(InteractiveScene):
         first_env_only=False,
         all_envs_single_image=False,
     ):
+        # A fisheye front camera (the default camera) has no pinhole P: MVP is then just the view matrix.
+        fisheye = self.fisheye_lens is not None and camera_intrinsics is None
         if camera_pos is None or camera_quat is None or camera_intrinsics is None:
             camera_pos = self["camera"].data.pos_w
             camera_quat = self["camera"].data.quat_w_world
@@ -1164,9 +1212,12 @@ class SidewalkScenePG(InteractiveScene):
             camera_quat = camera_quat[:1]
             camera_intrinsics = camera_intrinsics[:1]
         eye, at, up = lookat_from_pose(camera_pos, camera_quat)
-        P = perspective(camera_intrinsics, device=self.render_device, dtype=self.dtype)
         V = look_at(eye, at, up, device=self.render_device, dtype=self.dtype)
-        MVP = (P @ V).contiguous()  # [B,4,4]
+        if fisheye:
+            MVP = V.contiguous()
+        else:
+            P = perspective(camera_intrinsics, device=self.render_device, dtype=self.dtype)
+            MVP = (P @ V).contiguous()  # [B,4,4]
 
         num_rows, num_cols = self.terrain.terrain_origins.shape[:2]
         robot_terrain_idxs = self.terrain.terrain_levels * num_cols + self.terrain.terrain_types
@@ -1187,7 +1238,8 @@ class SidewalkScenePG(InteractiveScene):
                 _visibility_cache[cache_key] = torch.zeros(0, dtype=torch.bool, device=self.render_device)
                 return _visibility_cache[cache_key]
             points = states[:, :3].to(device=self.render_device, dtype=self.dtype)
-            in_frustum = self._project_persons(points, MVP[cam_index : cam_index + 1], self.behavior_fov_margin)[0]
+            in_frustum = self._project_persons(points, MVP[cam_index : cam_index + 1], self.behavior_fov_margin,
+                                               fisheye=fisheye)[0]
             # Cap by distance from the robot root, and always render pedestrians
             # close to the robot even when outside the camera view.
             robot_xy = self["robot"].data.root_pos_w[env_id, :2].to(device=self.render_device, dtype=self.dtype)
@@ -1276,16 +1328,24 @@ class SidewalkScenePG(InteractiveScene):
             dtype=self.dtype,
         )
         verts_h = torch.cat([all_render_smpl_verts, ones], dim=-1)  # [B,V,4]
-        verts_clip = verts_h @ MVP.transpose(1, 2)  # [B,V,4]
-        rast, _ = dr.rasterize(self.glctx, verts_clip, faces_merged, resolution=camera_shape)
-        img, _ = dr.interpolate(all_render_smpl_colors, rast, faces_merged)  # [B,H,W,3]
+        colors, faces = all_render_smpl_colors, faces_merged
+        if fisheye:
+            verts_clip, faces = self._fisheye_clip(verts_h @ V.transpose(1, 2), faces_merged)
+            colors = all_render_smpl_colors[:, faces_merged.long()].flatten(1, 2).contiguous()
+        else:
+            verts_clip = verts_h @ MVP.transpose(1, 2)  # [B,V,4]
+        rast, _ = dr.rasterize(self.glctx, verts_clip, faces, resolution=camera_shape)
+        img, _ = dr.interpolate(colors, rast, faces)  # [B,H,W,3]
         # Mask background (rast[..., 3] is triangle id / coverage; <=0 means background)
         mask = (rast[..., 3:4] > 0).to(torch.float32)
 
         if return_depth:
             verts_view = verts_h @ V.transpose(1, 2)  # [B, NUM_PEOPLE*V, 4]
             verts_view_depth = (-verts_view[..., 2:3]).contiguous()  # positive metric depth
-            depth, _ = dr.interpolate(verts_view_depth, rast, faces_merged)  # [B,H,W,1]
+            if fisheye:  # the RTX camera's distance_to_camera is Euclidean; match it
+                verts_view_depth = torch.linalg.norm(verts_view[:, faces_merged.long(), :3], dim=-1, keepdim=True)
+                verts_view_depth = verts_view_depth.flatten(1, 2).contiguous()
+            depth, _ = dr.interpolate(verts_view_depth, rast, faces)  # [B,H,W,1]
             depth = depth.flip(dims=[1])
 
         img = img.flip(
