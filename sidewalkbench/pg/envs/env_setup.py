@@ -404,6 +404,10 @@ class BaseEnvCfg(ManagerBasedRLEnvCfg):
             width, height, max_fov = float(self.scene.camera.width), float(self.scene.camera.height), 175.0
             s = width / fisheye["width"]
             fx, fy, cx, cy = (fisheye[k] * s for k in ("fx", "fy", "cx", "cy"))
+            # RTX's f-theta lens is radially symmetric, so it renders one focal length; the overlay uses the same one.
+            if abs(fx - fy) > 0.01 * max(fx, fy):
+                raise ValueError(f"fisheye_camera needs fx ~= fy (got fx={fisheye['fx']}, fy={fisheye['fy']})")
+            fx = fy = 0.5 * (fx + fy)
             robot_cfg["camera_intrinsics"] = np.array([fx, 0.0, cx, 0.0, fy, cy, 0.0, 0.0, 1.0]).reshape(3, 3)
             # scene.render_human composites the pedestrians onto the frame, so it needs the same lens.
             self.scene.pg_config["fisheye_lens"] = dict(
@@ -412,7 +416,7 @@ class BaseEnvCfg(ManagerBasedRLEnvCfg):
             )
             theta = np.linspace(0.0, 1.55, 4000)  # up to 89 deg off-axis; the sensor corner sits near 82 deg
             poly = theta * (1 + sum(fisheye.get(f"k{i}", 0.0) * theta ** (2 * i) for i in (1, 2, 3, 4)))
-            radius = 0.5 * (fx + fy) * poly
+            radius = fx * poly
             theta_of_r = np.polyfit(radius, theta, 5)[::-1]
             self.scene.camera.spawn = sim_utils.FisheyeCameraCfg(
                 projection_type="fisheyePolynomial",
